@@ -23,17 +23,24 @@ const describeError = (err: unknown): string => {
 }
 
 export const createReadinessChecker = ({ sequelize, redis, logger }: ReadinessDeps): ReadinessChecker => {
-  const probe = async (name: string, run: () => Promise<unknown>): Promise<DependencyStatus> => {
+  // Redis being down is a degraded state, logged once per transition rather than on every probe.
+  let redisWasDown = false
+
+  const probe = async (
+    name: string,
+    run: () => Promise<unknown>,
+  ): Promise<{ status: DependencyStatus; reason?: string }> => {
     let timer: NodeJS.Timeout | undefined
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => reject(new Error('timeout')), CHECK_TIMEOUT_MS)
     })
     try {
       await Promise.race([run(), timeout])
-      return 'up'
+      return { status: 'up' }
     } catch (err) {
-      logger.warn({ dependency: name, reason: describeError(err) }, 'readiness check failed')
-      return 'down'
+      const reason = describeError(err)
+      if (name !== 'redis') logger.warn({ dependency: name, reason }, 'readiness check failed')
+      return { status: 'down', reason }
     } finally {
       clearTimeout(timer)
     }
@@ -41,11 +48,18 @@ export const createReadinessChecker = ({ sequelize, redis, logger }: ReadinessDe
 
   return {
     check: async () => {
-      const [postgres, redisStatus] = await Promise.all([
+      const [postgres, redisProbe] = await Promise.all([
         probe('postgres', () => sequelize.query('SELECT 1')),
         probe('redis', () => redis.ping()),
       ])
-      return { postgres, redis: redisStatus }
+      const redisDown = redisProbe.status === 'down'
+      if (redisDown && !redisWasDown) {
+        logger.warn({ dependency: 'redis', reason: redisProbe.reason }, 'readiness degraded: redis is down')
+      } else if (!redisDown && redisWasDown) {
+        logger.info({ dependency: 'redis' }, 'readiness recovered: redis is up')
+      }
+      redisWasDown = redisDown
+      return { postgres: postgres.status, redis: redisProbe.status }
     },
   }
 }

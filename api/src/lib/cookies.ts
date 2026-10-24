@@ -37,3 +37,9 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
 export function clearCookie(name: string, path: string, secure = false): string {
   return serializeCookie(name, '', { maxAgeSeconds: 0, path, secure })
 }
+
+/** Presenter cookie for one session. The value is the raw presenter key; only its hash is stored. */
+export const presenterCookieName = (sessionId: string): string => `lp_presenter_${sessionId}`
+
+/** Participant cookie for one session. The value is the raw token; only its hash is stored. */
+export const participantCookieName = (sessionId: string): string => `lp_participant_${sessionId}`

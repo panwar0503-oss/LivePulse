@@ -51,6 +51,7 @@ export const createSessionsRouter = (deps: SessionsRouterDeps): Router => {
   router.get('/sessions/by-code/:code/participant-me', validateParams(codeParams), controller.participantMe)
 
   router.get('/sessions/:id', validateParams(idParams), controller.getPresenter)
+  router.get('/sessions/:id/state', validateParams(idParams), controller.getState)
   router.post(
     '/sessions/:id/presenter-access',
     validateParams(idParams),

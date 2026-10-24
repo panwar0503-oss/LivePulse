@@ -1,6 +1,6 @@
-import { UniqueConstraintError } from 'sequelize'
+import { QueryTypes, UniqueConstraintError } from 'sequelize'
 import type { Sequelize } from 'sequelize'
-import type { PresenterSession, PublicSession } from '@livepulse/shared'
+import type { PresenterSession, PresenterSessionState, PublicSession } from '@livepulse/shared'
 import { AppError } from '../errors/app-error.js'
 import { generateRoomCode as defaultGenerateRoomCode } from '../lib/room-code.js'
 import { generateToken, hashToken, safeEqualHash } from '../lib/tokens.js'
@@ -87,10 +87,17 @@ export async function checkPresenterKey(
   return session
 }
 
+export type ClosedPoll = { id: string; closedAt: Date }
+export type ClosedPrompt = { id: string; closedAt: Date }
+
+/**
+ * Lock order: session FOR UPDATE, then the open poll, then the open word prompt (each UPDATE waits for
+ * votes or submissions holding that row FOR SHARE).
+ */
 export async function endSession(
   deps: SessionsDeps & { sequelize: Sequelize },
   sessionId: string,
-): Promise<Session> {
+): Promise<{ session: Session; closedPoll: ClosedPoll | null; closedPrompt: ClosedPrompt | null }> {
   return deps.sequelize.transaction(async (transaction) => {
     // FOR UPDATE waits for in-flight joins (FOR SHARE) to commit, so no join commits after the end.
     // The end time is taken after the lock: a plain UPDATE would evaluate it before waiting.
@@ -103,7 +110,29 @@ export async function endSession(
     if (session.status === 'ACTIVE') {
       await session.update({ status: 'ENDED', endedAt: new Date() }, { transaction })
     }
-    return session
+    // Same transaction: the session and its open poll end together or not at all. The partial unique
+    // index allows at most one ACTIVE poll, and an ended session has none left, so a repeat end closes nothing.
+    // clock_timestamp() is read when each poll row is updated, after the wait for votes in flight (FOR SHARE).
+    // A vote that commits during that wait is therefore never later than the poll's closed_at.
+    const rows = await deps.sequelize.query<{ id: string; closed_at: Date }>(
+      "UPDATE polls SET status = 'CLOSED', closed_at = clock_timestamp(), updated_at = clock_timestamp() " +
+        "WHERE session_id = :sessionId AND status = 'ACTIVE' RETURNING id, closed_at",
+      { replacements: { sessionId }, type: QueryTypes.SELECT, transaction },
+    )
+    const closed = rows[0]
+    // Same rules for the open word prompt (at most one ACTIVE per session, by its partial unique index).
+    const promptRows = await deps.sequelize.query<{ id: string; closed_at: Date }>(
+      "UPDATE word_prompts SET status = 'CLOSED', closed_at = clock_timestamp(), " +
+        "updated_at = clock_timestamp() WHERE session_id = :sessionId AND status = 'ACTIVE' " +
+        'RETURNING id, closed_at',
+      { replacements: { sessionId }, type: QueryTypes.SELECT, transaction },
+    )
+    const closedWord = promptRows[0]
+    return {
+      session,
+      closedPoll: closed ? { id: closed.id, closedAt: closed.closed_at } : null,
+      closedPrompt: closedWord ? { id: closedWord.id, closedAt: closedWord.closed_at } : null,
+    }
   })
 }
 
@@ -127,6 +156,32 @@ export const toPublicSession = (session: Session): PublicSession => ({
 
 export const buildJoinUrl = (webOrigin: string, roomCode: string): string =>
   `${webOrigin}/join?code=${roomCode}`
+
+export const toPresenterState = (
+  session: Session,
+  joinedCount: number,
+  connectedCount: number | null,
+): PresenterSessionState => ({
+  id: session.id,
+  title: session.title,
+  roomCode: session.roomCode,
+  status: session.status,
+  endedAt: session.endedAt?.toISOString() ?? null,
+  joinedCount,
+  connectedCount,
+})
+
+// Reuses the presenter check; a live count that cannot be read is reported as null, never 0.
+export async function getPresenterState(
+  deps: SessionsDeps,
+  countConnected: (sessionId: string) => Promise<number | null>,
+  sessionId: string,
+  presenterKey: string | undefined,
+): Promise<PresenterSessionState> {
+  const { session, participantCount } = await getPresenterSession(deps, sessionId, presenterKey)
+  // countConnected already maps Redis/socket failures to null.
+  return toPresenterState(session, participantCount, await countConnected(session.id))
+}
 
 export const toPresenterSession = (
   session: Session,

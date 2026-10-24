@@ -8,6 +8,7 @@ import {
   presenterAccessBodySchema,
   presenterKeySchema,
   presenterSessionSchema,
+  presenterSessionStateSchema,
   roomCodeSchema,
   sessionDescriptionSchema,
   sessionTitleSchema,
@@ -131,5 +132,42 @@ describe('session responses', () => {
       session: { title: 'Town hall', status: 'PAUSED', roomCode: 'ABC234' },
     })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('presenter session state', () => {
+  const state = {
+    id: '3f2b8c1e-5d4a-4b6f-9a7e-1c2d3e4f5a6b',
+    title: 'Town hall',
+    roomCode: 'ABC234',
+    status: 'ACTIVE',
+    endedAt: null,
+    joinedCount: 12,
+    connectedCount: 4,
+  }
+
+  it('accepts a live session state with a connected count', () => {
+    expect(presenterSessionStateSchema.safeParse(state).success).toBe(true)
+  })
+
+  it('accepts a null connected count when the live count could not be taken', () => {
+    expect(presenterSessionStateSchema.safeParse({ ...state, connectedCount: null }).success).toBe(true)
+  })
+
+  it('accepts an ended session with an endedAt timestamp', () => {
+    const result = presenterSessionStateSchema.safeParse({
+      ...state,
+      status: 'ENDED',
+      endedAt: '2026-10-24T10:00:00.000Z',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a negative joined count', () => {
+    expect(presenterSessionStateSchema.safeParse({ ...state, joinedCount: -1 }).success).toBe(false)
+  })
+
+  it('rejects a state with an unknown status', () => {
+    expect(presenterSessionStateSchema.safeParse({ ...state, status: 'PAUSED' }).success).toBe(false)
   })
 })

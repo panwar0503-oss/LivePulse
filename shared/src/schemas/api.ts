@@ -14,10 +14,15 @@ export const errorEnvelope = z.object({
 
 export const healthDataSchema = z.object({ status: z.literal('ok') })
 
-export const readyDataSchema = z.object({
-  status: z.literal('ready'),
-  checks: z.object({ postgres: z.literal('up'), redis: z.literal('up') }),
-})
+// 'degraded' means Postgres is up but Redis is down: still 200, sockets keep working without fan-out.
+export const readyDataSchema = z
+  .object({
+    status: z.enum(['ready', 'degraded']),
+    checks: z.object({ postgres: z.enum(['up', 'down']), redis: z.enum(['up', 'down']) }),
+  })
+  .refine((v) => v.status !== 'ready' || (v.checks.postgres === 'up' && v.checks.redis === 'up'), {
+    message: 'Ready requires every dependency to be up.',
+  })
 
 export const notReadyDetailsSchema = z.object({
   postgres: z.enum(['up', 'down']),

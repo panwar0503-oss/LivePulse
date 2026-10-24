@@ -170,7 +170,7 @@ describe('participants service', () => {
         endSession(deps, session.id),
       ])
 
-      const endedAt = ended.endedAt?.getTime() ?? Number.NaN
+      const endedAt = ended.session.endedAt?.getTime() ?? Number.NaN
       if (joinResult instanceof AppError) {
         expect(joinResult.code).toBe('SESSION_NOT_OPEN')
         expect(await models.Participant.count({ where: { sessionId: session.id } })).toBe(0)

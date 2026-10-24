@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { ParticipantMe } from '@livepulse/shared'
+import { LiveParticipantPoll } from '../../../components/polls/LiveParticipantPoll'
+import { LiveParticipantWordPrompt } from '../../../components/word-cloud/LiveParticipantWordPrompt'
 import { JoinForm } from '../../../components/sessions/JoinForm'
 import { ParticipantView } from '../../../components/sessions/ParticipantView'
 import { StatusMessage } from '../../../components/sessions/StatusMessage'
 import { getParticipantMe, joinSession } from '../../../lib/api/sessions'
+import { useSessionSocket } from '../../../realtime/use-session-socket'
 
 type View =
   | { kind: 'loading' }
@@ -15,6 +18,23 @@ type View =
   | { kind: 'error'; message: string }
 
 type ParticipantClientProps = { roomCode: string }
+
+type LiveParticipantProps = { roomCode: string; me: ParticipantMe; onRefetch: () => void }
+
+// Mounted only once the participant has joined, so the socket is never opened without a participant cookie.
+function LiveParticipant({ roomCode, me, onRefetch }: LiveParticipantProps) {
+  const live = useSessionSocket({
+    auth: { role: 'participant', roomCode },
+    onConnectedRefetch: onRefetch,
+  })
+  return (
+    <div className="flex flex-col gap-6">
+      <ParticipantView me={me} connection={live.status} endedLive={live.ended} />
+      <LiveParticipantPoll roomCode={roomCode} />
+      <LiveParticipantWordPrompt roomCode={roomCode} />
+    </div>
+  )
+}
 
 export function ParticipantClient({ roomCode }: ParticipantClientProps) {
   const [view, setView] = useState<View>({ kind: 'loading' })
@@ -35,6 +55,13 @@ export function ParticipantClient({ roomCode }: ParticipantClientProps) {
     void load()
   }, [load])
 
+  // Silent re-read after (re)connect: keeps the current view and only swaps in fresh data.
+  const refetch = useCallback((): void => {
+    void getParticipantMe(roomCode).then((result) => {
+      if (result.ok) setView({ kind: 'joined', me: result.data })
+    })
+  }, [roomCode])
+
   const handleJoin = async (values: { roomCode: string; displayName: string }): Promise<void> => {
     setPending(true)
     setJoinError(undefined)
@@ -53,7 +80,7 @@ export function ParticipantClient({ roomCode }: ParticipantClientProps) {
     case 'loading':
       return <p role="status">Loading…</p>
     case 'joined':
-      return <ParticipantView me={view.me} />
+      return <LiveParticipant roomCode={roomCode} me={view.me} onRefetch={refetch} />
     case 'needsJoin':
       return (
         <div className="flex flex-col gap-4">

@@ -7,6 +7,7 @@ import { createApp } from '../../src/app.js'
 import type { Env } from '../../src/config/env.js'
 import { initModels } from '../../src/models/index.js'
 import type { DependencyStatus, ReadinessChecker } from '../../src/services/readiness.service.js'
+import { noopRealtime } from '../helpers/test-app.js'
 
 const env: Env = {
   NODE_ENV: 'test',
@@ -16,6 +17,9 @@ const env: Env = {
   REDIS_URL: 'redis://stub',
   TRUST_PROXY: false,
   LOG_LEVEL: 'fatal',
+  PRESENCE_GRACE_MS: 5000,
+  SOCKET_MAX_PER_IP: 20,
+  SOCKET_MAX_PER_SESSION: 500,
 }
 
 // These tests never reach a session route, so a Sequelize that never connects is enough.
@@ -29,7 +33,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const buildApp = (postgres: DependencyStatus = 'up', redis: DependencyStatus = 'up'): Express => {
   const readiness: ReadinessChecker = { check: async () => ({ postgres, redis }) }
-  return createApp({ env, logger: pino({ level: 'silent' }), readiness, sequelize, models })
+  return createApp({
+    env,
+    logger: pino({ level: 'silent' }),
+    readiness,
+    sequelize,
+    models,
+    realtime: noopRealtime,
+  })
 }
 
 describe('health endpoint', () => {
@@ -52,22 +63,25 @@ describe('readiness endpoint', () => {
     })
   })
 
-  it('reports not ready and names the failing dependency when Redis is down', async () => {
+  it('reports degraded but still available when Redis is down', async () => {
     const res = await request(buildApp('up', 'down')).get('/ready')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      success: true,
+      data: { status: 'degraded', checks: { postgres: 'up', redis: 'down' } },
+    })
+  })
+
+  it('reports not ready and names the failing dependency when Postgres is down', async () => {
+    const res = await request(buildApp('down', 'up')).get('/ready')
 
     expect(res.status).toBe(503)
     expect(res.body.success).toBe(false)
     expect(res.body.error.code).toBe('NOT_READY')
     expect(res.body.error.message).toBe('Service not ready')
-    expect(res.body.error.details).toEqual({ postgres: 'up', redis: 'down' })
-    expect(res.body.error.requestId).toBe(res.headers['x-request-id'])
-  })
-
-  it('reports not ready when Postgres is down', async () => {
-    const res = await request(buildApp('down', 'up')).get('/ready')
-
-    expect(res.status).toBe(503)
     expect(res.body.error.details).toEqual({ postgres: 'down', redis: 'up' })
+    expect(res.body.error.requestId).toBe(res.headers['x-request-id'])
   })
 })
 

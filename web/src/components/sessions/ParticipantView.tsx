@@ -1,12 +1,16 @@
 import type { ParticipantMe } from '@livepulse/shared'
+import type { SocketStatus } from '../../realtime/session-socket-state'
 import { StatusMessage } from './StatusMessage'
 
 export type ParticipantViewProps = {
   me: ParticipantMe
+  connection?: SocketStatus
+  // True when a live notice says the session ended, even if the snapshot still says active.
+  endedLive?: boolean
 }
 
-export function ParticipantView({ me }: ParticipantViewProps) {
-  const ended = me.session.status === 'ENDED'
+export function ParticipantView({ me, connection, endedLive = false }: ParticipantViewProps) {
+  const ended = me.session.status === 'ENDED' || endedLive
   return (
     <section className="flex flex-col gap-4 text-left">
       <div className="flex flex-wrap items-center gap-3">
@@ -18,6 +22,13 @@ export function ParticipantView({ me }: ParticipantViewProps) {
       <p>
         Joined as <span className="font-semibold">{me.participant.displayName}</span>
       </p>
+      {connection === 'refused' ? (
+        <StatusMessage kind="error">
+          We could not reconnect to this session. Refresh the page or join again.
+        </StatusMessage>
+      ) : (connection === 'reconnecting' || connection === 'disconnected') && !ended ? (
+        <p role="status">Reconnecting…</p>
+      ) : null}
       {ended ? (
         <StatusMessage kind="info">This session has ended.</StatusMessage>
       ) : (

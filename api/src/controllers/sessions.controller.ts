@@ -1,7 +1,10 @@
 import type { Request, RequestHandler, Response } from 'express'
+import type { Logger } from 'pino'
 import type { Sequelize } from 'sequelize'
 import type { CreateSessionBody, CreatedSession, JoinBody, PresenterAccessBody } from '@livepulse/shared'
-import { parseCookies, serializeCookie } from '../lib/cookies.js'
+import { describeError } from '../db/redis.js'
+import { participantCookieName, parseCookies, presenterCookieName, serializeCookie } from '../lib/cookies.js'
+import type { Realtime } from '../realtime/index.js'
 import { getParticipantMe, joinSession, toPublicParticipant } from '../services/participants.service.js'
 import {
   buildJoinUrl,
@@ -11,6 +14,7 @@ import {
   findSessionByCode,
   findSessionIdByCode,
   getPresenterSession,
+  getPresenterState,
   toPresenterSession,
   toPublicSession,
   type SessionModels,
@@ -19,15 +23,17 @@ import {
 export type SessionsControllerDeps = {
   sequelize: Sequelize
   models: SessionModels
+  realtime: Pick<Realtime, 'emitSessionEnded' | 'countConnected'> & {
+    polls: Pick<Realtime['polls'], 'emitPollClosed' | 'emitResultsNow'>
+    wordCloud: Pick<Realtime['wordCloud'], 'emitWordPromptClosed' | 'emitCloudNow'>
+  }
+  logger: Logger
   webOrigin: string
   secureCookies: boolean
 }
 
 const COOKIE_MAX_AGE_SECONDS = 7 * 24 * 3600
 const COOKIE_PATH = '/api'
-
-const presenterCookieName = (sessionId: string): string => `lp_presenter_${sessionId}`
-const participantCookieName = (sessionId: string): string => `lp_participant_${sessionId}`
 
 // Cookie values are secrets: they are passed to the service and never logged.
 const readCookie = (req: Request, name: string): string | undefined => parseCookies(req.get('cookie'))[name]
@@ -36,7 +42,7 @@ const readCookie = (req: Request, name: string): string | undefined => parseCook
 const param = (req: Request, name: 'id' | 'code'): string => String(req.params[name])
 
 type SessionsController = Record<
-  'create' | 'getByCode' | 'join' | 'participantMe' | 'getPresenter' | 'presenterAccess' | 'end',
+  'create' | 'getByCode' | 'join' | 'participantMe' | 'getPresenter' | 'getState' | 'presenterAccess' | 'end',
   RequestHandler
 >
 
@@ -113,6 +119,17 @@ export const createSessionsController = (deps: SessionsControllerDeps): Sessions
 
   const getPresenter: RequestHandler = presenterView
 
+  const getState: RequestHandler = async (req, res) => {
+    const id = param(req, 'id')
+    const data = await getPresenterState(
+      deps,
+      deps.realtime.countConnected,
+      id,
+      readCookie(req, presenterCookieName(id)),
+    )
+    res.json({ success: true, data })
+  }
+
   const presenterAccess: RequestHandler = async (req, res) => {
     const id = param(req, 'id')
     const { presenterKey } = req.body as PresenterAccessBody
@@ -125,9 +142,43 @@ export const createSessionsController = (deps: SessionsControllerDeps): Sessions
     const id = param(req, 'id')
     // Authorise first, then end; the response re-reads so the count and status are current.
     await getPresenterSession(deps, id, readCookie(req, presenterCookieName(id)))
-    await endSession(deps, id)
+    const { session, closedPoll, closedPrompt } = await endSession(deps, id)
+    if (closedPrompt) {
+      try {
+        await deps.realtime.wordCloud.emitCloudNow(closedPrompt.id)
+        deps.realtime.wordCloud.emitWordPromptClosed(session.id, closedPrompt.id, closedPrompt.closedAt)
+      } catch (err) {
+        deps.logger.warn(
+          { sessionId: session.id, realtimeError: describeError(err) },
+          'word prompt closed emit failed',
+        )
+      }
+    }
+    // The end closed the open poll in the same commit: final counts first, then the close notice.
+    if (closedPoll) {
+      try {
+        await deps.realtime.polls.emitResultsNow(session.id, closedPoll.id)
+        deps.realtime.polls.emitPollClosed(session.id, closedPoll.id, closedPoll.closedAt)
+      } catch (err) {
+        deps.logger.warn(
+          { sessionId: session.id, realtimeError: describeError(err) },
+          'poll closed emit failed',
+        )
+      }
+    }
+    // The end has committed. endSession does not report whether this call made the transition, so the
+    // notice is sent on every successful end (same sessionId and first endedAt; clients treat it as idempotent).
+    // A failed notice must never fail the request: clients repair it by refetching over HTTP.
+    try {
+      if (session.endedAt) deps.realtime.emitSessionEnded(session.id, session.endedAt)
+    } catch (err) {
+      deps.logger.warn(
+        { sessionId: session.id, realtimeError: describeError(err) },
+        'session ended emit failed',
+      )
+    }
     await presenterView(req, res)
   }
 
-  return { create, getByCode, join, participantMe, getPresenter, presenterAccess, end }
+  return { create, getByCode, join, participantMe, getPresenter, getState, presenterAccess, end }
 }

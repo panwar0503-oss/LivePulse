@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { PresenterSession } from '@livepulse/shared'
+import type { SocketStatus } from '../../realtime/session-socket-state'
 import { StatusMessage } from './StatusMessage'
 
 export type PresenterDashboardProps = {
@@ -9,15 +10,39 @@ export type PresenterDashboardProps = {
   pending: boolean
   error?: string
   onEnd: () => void
+  // Live-connection inputs; all optional so the dashboard also renders from the HTTP session alone.
+  connection?: SocketStatus
+  // undefined hides the live count; null means it could not be taken right now.
+  liveCount?: number | null
+  degraded?: boolean
+  // True when a live notice (or the snapshot) says the session ended.
+  endedLive?: boolean
+}
+
+const CONNECTION_TEXT: Record<SocketStatus, string> = {
+  connecting: 'Reconnecting…',
+  connected: 'Connected',
+  reconnecting: 'Reconnecting…',
+  disconnected: 'Reconnecting…',
+  refused: 'Connection refused',
 }
 
 const buttonClass =
   'rounded px-4 py-2 font-medium focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700'
 
-export function PresenterDashboard({ session, pending, error, onEnd }: PresenterDashboardProps) {
+export function PresenterDashboard({
+  session,
+  pending,
+  error,
+  onEnd,
+  connection,
+  liveCount,
+  degraded = false,
+  endedLive = false,
+}: PresenterDashboardProps) {
   const [confirming, setConfirming] = useState(false)
   const [copyMessage, setCopyMessage] = useState<string | undefined>()
-  const ended = session.status === 'ENDED'
+  const ended = session.status === 'ENDED' || endedLive
 
   const copy = async (): Promise<void> => {
     try {
@@ -36,6 +61,10 @@ export function PresenterDashboard({ session, pending, error, onEnd }: Presenter
           {ended ? 'Ended' : 'Live'}
         </span>
       </div>
+      {connection ? <p>{CONNECTION_TEXT[connection]}</p> : null}
+      {degraded ? (
+        <StatusMessage kind="info">Live updates may be delayed. Refresh if numbers look wrong.</StatusMessage>
+      ) : null}
       {session.description ? <p className="whitespace-pre-wrap">{session.description}</p> : null}
       {ended ? <StatusMessage kind="info">This session has ended.</StatusMessage> : null}
 
@@ -66,6 +95,20 @@ export function PresenterDashboard({ session, pending, error, onEnd }: Presenter
       <p>
         <span className="font-semibold">{session.participantCount}</span> people have joined
       </p>
+
+      {liveCount === undefined ? null : liveCount === null ? (
+        <p>
+          <span className="font-semibold">—</span> Count unavailable right now
+        </p>
+      ) : (
+        <p>
+          {/* Only the number is announced, so the surrounding words are not re-read on every change. */}
+          <span aria-live="polite" aria-atomic="true" className="font-semibold">
+            {liveCount}
+          </span>{' '}
+          people connected right now
+        </p>
+      )}
 
       {error ? <StatusMessage kind="error">{error}</StatusMessage> : null}
 

@@ -28,7 +28,7 @@ transaction emits nothing.
 
 ### Word cloud
 Empty/oversized rejected · whitespace and casing normalised · script-like text rendered as text · one response
-per participant per prompt · rate limit · empty cloud returns `[]` · stable top-N ordering.
+per participant per prompt · rate limit · empty cloud returns `{ total: 0, version: 0, entries: [] }` · stable top-N ordering.
 
 ### Q&A
 Submit + rate limit · one upvote per participant (concurrent upvotes → one) · cannot upvote own question ·

@@ -83,6 +83,17 @@ export const presenterSessionSchema = z.object({
   participantCount: z.number().int().min(0),
 })
 
+export const presenterSessionStateSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  roomCode: z.string().length(ROOM_CODE_LENGTH),
+  status: sessionStatusSchema,
+  endedAt: z.string().datetime().nullable(),
+  joinedCount: z.number().int().min(0),
+  // Null when the live count could not be taken (Redis or socket lookup failed).
+  connectedCount: z.number().int().min(0).nullable(),
+})
+
 export const participantMeSchema = z.object({
   participant: z.object({ displayName: z.string() }),
   session: publicSessionSchema,
@@ -95,4 +106,5 @@ export type SessionStatus = z.infer<typeof sessionStatusSchema>
 export type PublicSession = z.infer<typeof publicSessionSchema>
 export type CreatedSession = z.infer<typeof createdSessionSchema>
 export type PresenterSession = z.infer<typeof presenterSessionSchema>
+export type PresenterSessionState = z.infer<typeof presenterSessionStateSchema>
 export type ParticipantMe = z.infer<typeof participantMeSchema>

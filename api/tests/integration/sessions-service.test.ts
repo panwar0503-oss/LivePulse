@@ -97,8 +97,8 @@ describe('sessions service', () => {
   it('ending a session twice leaves the first end time unchanged', async () => {
     const { session } = await createSession({ models }, { title: 'Town hall' })
 
-    const first = await endSession({ sequelize, models }, session.id)
-    const second = await endSession({ sequelize, models }, session.id)
+    const first = (await endSession({ sequelize, models }, session.id)).session
+    const second = (await endSession({ sequelize, models }, session.id)).session
 
     expect(first.status).toBe('ENDED')
     expect(first.endedAt).toBeInstanceOf(Date)

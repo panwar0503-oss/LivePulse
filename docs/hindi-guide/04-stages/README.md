@@ -15,9 +15,9 @@ Status का स्रोत: हर requirement की `requirement.md` मे
 | — | 1 | — | Claude Code workflow + docs | done | `e5dce2d`, `708abec` (docs) |
 | [stage-01](./stage-01-foundation.md) | 2 | `foundation` | Monorepo, Docker (pgvector + Redis), env, Sequelize + migrations, logging, errors, `/health` और `/ready`, Next.js shell | completed | `f382ca2` |
 | [stage-02](./stage-02-sessions-and-join.md) | 3 | `sessions-and-join` | Session बनाना, room code, presenter key, token के साथ join, landing/create/join pages | completed (`requirements/sessions-and-join/requirement.md` line 5), पर **अभी commit नहीं हुआ** — इसकी files git status में untracked/modified हैं | — |
-| stage-03 | 4 | `realtime-backbone` | Socket.IO + Redis adapter, handshake auth, rooms, presence, state snapshot, reconnect, session end | शुरू नहीं हुआ | — |
-| stage-04 | 5 | `live-polls` | Polls, lifecycle, transactional voting, live results, visibility | शुरू नहीं हुआ | — |
-| stage-05 | 6 | `word-cloud` | Prompts, responses, normalisation, live cloud | शुरू नहीं हुआ | — |
+| [stage-03](./stage-03-realtime-backbone.md) | 4 | `realtime-backbone` | Socket.IO + Redis adapter, handshake auth, rooms, presence, state snapshot, reconnect, session end | verified (lint, typecheck, unit, build, integration 110/110); **commit बाक़ी** | — |
+| [stage-04](./stage-04-live-polls.md) | 5 | `live-polls` | Polls, lifecycle, transactional voting, live results, visibility | verified (lint, typecheck, unit, build, integration 172/172, live e2e 22/22); **commit बाक़ी** | — |
+| [stage-05](./stage-05-word-cloud.md) | 6 | `word-cloud` | Prompts, responses, normalisation, live cloud | verified (lint, typecheck, unit, build, integration 238/238, live e2e 22/22); **commit बाक़ी** | — |
 | stage-06 | 7 | `live-qna` | Questions, upvotes, presenter moderation, live ordering | शुरू नहीं हुआ | — |
 | stage-07 | 8 | `live-reactions` | Emoji reactions, throttled bursts, per-minute counts | शुरू नहीं हुआ | — |
 | stage-08 | 9 | `ai-foundation` | LLM + embeddings providers (real + fake), pgvector, `ai_jobs` runner, budget, kill switch | शुरू नहीं हुआ | — |

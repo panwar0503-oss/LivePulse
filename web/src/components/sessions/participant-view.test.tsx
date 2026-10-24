@@ -23,4 +23,22 @@ describe('participant view', () => {
     expect(html).toContain('This session has ended')
     expect(html).not.toContain('You are in this session.')
   })
+
+  it('shows the ended message from a live notice even when the snapshot still says active', () => {
+    const html = renderToStaticMarkup(<ParticipantView me={me} connection="connected" endedLive />)
+    expect(html).toContain('This session has ended')
+    expect(html).not.toContain('You are in this session.')
+  })
+
+  it('shows Reconnecting while the connection is down', () => {
+    const html = renderToStaticMarkup(<ParticipantView me={me} connection="reconnecting" />)
+    expect(html).toContain('Reconnecting…')
+    expect(html).toContain('Asha')
+  })
+
+  it('shows a plain refused message without any server text', () => {
+    const html = renderToStaticMarkup(<ParticipantView me={me} connection="refused" />)
+    expect(html).toContain('We could not reconnect to this session. Refresh the page or join again.')
+    expect(html).not.toContain('TOO_MANY_CONNECTIONS')
+  })
 })

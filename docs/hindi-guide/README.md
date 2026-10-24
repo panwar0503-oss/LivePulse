@@ -14,6 +14,9 @@ features के लिए मुख्य संदर्भ है।
 | 4 | [04-stages/README.md](04-stages/README.md) | सभी stages की सूची और हर stage का status |
 | 5 | [04-stages/stage-01-foundation.md](04-stages/stage-01-foundation.md) | Stage 1: project का ढाँचा, Docker, health checks |
 | 6 | [04-stages/stage-02-sessions-and-join.md](04-stages/stage-02-sessions-and-join.md) | Stage 2: session बनाना और join करना |
+| 6a | [04-stages/stage-03-realtime-backbone.md](04-stages/stage-03-realtime-backbone.md) | Stage 3: live connection, presence, session end |
+| 6b | [04-stages/stage-04-live-polls.md](04-stages/stage-04-live-polls.md) | Stage 4: live polls, एक vote, results switch |
+| 6c | [04-stages/stage-05-word-cloud.md](04-stages/stage-05-word-cloud.md) | Stage 5: word cloud, एक शब्द, normalisation, show/hide |
 | 7 | [05-code/](05-code/) | हर फ़ाइल का code, line by line, हिंदी में |
 | 8 | [06-how-to-add-next-stage.md](06-how-to-add-next-stage.md) | अगला feature कैसे जोड़ें (step by step) |
 | 9 | [07-decisions.md](07-decisions.md) | हर बड़ा फ़ैसला: क्या, क्यों, trade-off |
@@ -52,7 +55,14 @@ features के लिए मुख्य संदर्भ है।
 ## अभी की स्थिति (2026-10-24)
 
 - Stage 1 (foundation): पूरा, verified (commit `f382ca2`)।
-- Stage 2 (sessions-and-join): पूरा, verified; commit अभी बाकी है।
-- अगला: realtime-backbone (requirement अभी नहीं लिखा गया)।
+- Stage 2 (sessions-and-join): पूरा, verified (commit `1f6937f`)।
+- Stage 3 (realtime-backbone): पूरा, verified (integration 110/110); commit अभी बाकी है।
+  विवरण: [04-stages/stage-03-realtime-backbone.md](04-stages/stage-03-realtime-backbone.md)।
+- Stage 4 (live-polls): पूरा, verified (integration 172/172, live e2e 22/22); commit अभी बाकी है।
+  विवरण: [04-stages/stage-04-live-polls.md](04-stages/stage-04-live-polls.md)।
+- Stage 5 (word-cloud): पूरा, verified (integration 238/238, live e2e 22/22); commit अभी बाकी है।
+  विवरण: [04-stages/stage-05-word-cloud.md](04-stages/stage-05-word-cloud.md)।
+- अगला कदम: Stage 3–5 का commit, browser में polls और word cloud की जाँच; अगला stage (roadmap में Q&A, फिर
+  reactions) आपकी approval के बाद ही।
 
 सारे commands और नतीजे `08-verification-log.md` में हैं। Demo से पहले `09-demo-script.md` पढ़ें।

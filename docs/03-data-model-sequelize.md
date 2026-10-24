@@ -20,29 +20,51 @@ Conventions: tables and columns `snake_case` (Sequelize `underscored: true`), mo
 
 ### polls (Phase 5)
 
-- `id` · `session_id` FK · `question` · `status` `DRAFT | ACTIVE | CLOSED` · `show_results` boolean
-- `closed_at` nullable · `source_suggestion_id` nullable FK → ai_poll_suggestions (Phase 11)
-- Partial unique index: one `ACTIVE` poll per session
+- `id` UUID PK · `session_id` FK → sessions (`ON DELETE CASCADE`) · `question` `varchar(200)`
+- `status` enum `enum_polls_status`: `DRAFT | ACTIVE | CLOSED`, default `DRAFT` · `show_results` boolean, default `true`
+- `closed_at` timestamptz nullable · `created_at` · `updated_at`
+- `source_suggestion_id` nullable FK → ai_poll_suggestions (Phase 11, not in the Phase 5 migration)
+- CHECK `polls_closed_at_matches_status`: `(status = 'CLOSED') = (closed_at IS NOT NULL)`
+- CHECK `polls_question_not_blank`: `length(btrim(question)) > 0`
+- Index `polls_session_created_idx` on `(session_id, created_at)`
+- **Partial unique index `polls_one_active_per_session` on `(session_id) WHERE status = 'ACTIVE'`**: at most one open poll per session
+- `closed_at` is written in the same update that sets `CLOSED`; no database trigger sets it. `closePoll` sets it from the
+  app clock after taking the row lock. `endSession` sets it in SQL with `clock_timestamp()`.
 
 ### poll_options (Phase 5)
 
-- `id` · `poll_id` FK · `label` · `position` · unique `(poll_id, position)` · unique `(id, poll_id)` for composite FK
+- `id` UUID PK · `poll_id` FK → polls (`ON DELETE CASCADE`) · `label` `varchar(80)` · `position` smallint · timestamps
+- CHECK `poll_options_position_range`: `position BETWEEN 0 AND 5` · CHECK `poll_options_label_not_blank`: `length(btrim(label)) > 0`
+- Unique `poll_options_poll_position_key` on `(poll_id, position)` · unique `poll_options_poll_label_key` on `(poll_id, label)`
+- Unique `poll_options_id_poll_key` on `(id, poll_id)`: target of the composite FK from votes
+- The API refuses duplicate labels case-insensitively (trimmed); the unique index is case-sensitive.
 
 ### votes (Phase 5)
 
-- `id` · `poll_id` · `option_id` · `participant_id` · `created_at`
-- **Unique `(poll_id, participant_id)`** · index `(poll_id, option_id)`
-- Composite FK `(option_id, poll_id)` → `poll_options(id, poll_id)` so the DB guarantees the option belongs to the poll
+- `id` UUID PK · `poll_id` · `option_id` · `participant_id` · `created_at` (no `updated_at`: votes are final)
+- **Unique `votes_poll_participant_key` on `(poll_id, participant_id)`**: one vote per participant per poll
+- Composite FK `votes_option_poll_fkey` `(option_id, poll_id)` → `poll_options(id, poll_id)`, `ON DELETE CASCADE`: the DB
+  guarantees the option belongs to the poll (raw SQL, since queryInterface cannot declare it)
+- FK `poll_id` → polls and FK `participant_id` → participants, both `ON DELETE CASCADE`
+- Index `votes_poll_option_idx` on `(poll_id, option_id)`
 
 ### word_prompts (Phase 6)
 
-- `id` · `session_id` · `prompt` · `status` `OPEN | CLOSED`
+- `id` UUID PK · `session_id` FK → sessions (`ON DELETE CASCADE`) · `question` `varchar(200)` · timestamps
+- `status` enum `enum_word_prompts_status`: `DRAFT | ACTIVE | CLOSED` (default `DRAFT`) · `show_cloud` boolean (default `true`)
+- `closed_at` nullable. CHECK `word_prompts_closed_at_matches_status`: `(status = 'CLOSED') = (closed_at IS NOT NULL)`
+- CHECK `word_prompts_question_not_blank`: `length(btrim(question)) > 0`
+- **Partial unique index `word_prompts_one_active_per_session` on `(session_id) WHERE status = 'ACTIVE'`**: at most one open prompt per session
+- Index `word_prompts_session_created_idx` on `(session_id, created_at)`
 
 ### word_responses (Phase 6)
 
-- `id` · `prompt_id` FK · `session_id` · `participant_id` · `normalized_word` · `display_word`
-- Unique `(prompt_id, participant_id)` · index `(prompt_id, normalized_word)`
-- `embedding vector(384)` nullable (Phase 13, for semantic themes)
+- `id` UUID PK · `prompt_id` FK → word_prompts (`word_responses_prompt_id_fkey`, `ON DELETE CASCADE`) · `participant_id` FK → participants (`word_responses_participant_id_fkey`, `ON DELETE CASCADE`)
+- `normalized_word` `varchar(120)` · `display_word` `varchar(30)` · `created_at` (no `updated_at`: answers are final)
+- No `session_id` column: the session is read from the prompt row
+- **Unique `word_responses_prompt_participant_key` on `(prompt_id, participant_id)`**: one answer per participant per prompt
+- Index `word_responses_prompt_word_idx` on `(prompt_id, normalized_word)`
+- CHECK `word_responses_normalized_not_blank` and `word_responses_display_not_blank`: `length(btrim(...)) > 0`
 
 ### questions (Phase 7)
 

@@ -2,11 +2,19 @@
 
 import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import type { PresenterSession } from '@livepulse/shared'
+import type { PresenterSession, PresenterSessionState } from '@livepulse/shared'
+import { useSessionSocket } from '../../../realtime/use-session-socket'
+import { PresenterPolls } from '../../../components/polls/PresenterPolls'
+import { PresenterWordPrompts } from '../../../components/word-cloud/PresenterWordPrompts'
 import { PresenterDashboard } from '../../../components/sessions/PresenterDashboard'
 import { PresenterKeyForm } from '../../../components/sessions/PresenterKeyForm'
 import { StatusMessage } from '../../../components/sessions/StatusMessage'
-import { endSession, getPresenterSession, presenterAccess } from '../../../lib/api/sessions'
+import {
+  endSession,
+  getPresenterSession,
+  getPresenterState,
+  presenterAccess,
+} from '../../../lib/api/sessions'
 
 type View =
   | { kind: 'loading' }
@@ -14,6 +22,53 @@ type View =
   | { kind: 'notFound' }
   | { kind: 'error'; message: string }
   | { kind: 'ready'; session: PresenterSession }
+
+type LivePresenterProps = {
+  session: PresenterSession
+  pending: boolean
+  error?: string
+  onEnd: () => void
+}
+
+// Mounted only after the presenter cookie check passed, so the socket is never opened unauthenticated.
+function LivePresenter({ session, pending, error, onEnd }: LivePresenterProps) {
+  const [snapshot, setSnapshot] = useState<PresenterSessionState | undefined>()
+
+  const refetch = useCallback((): void => {
+    void getPresenterState(session.id).then((result) => {
+      if (result.ok) setSnapshot(result.data)
+    })
+  }, [session.id])
+
+  useEffect(() => {
+    refetch()
+  }, [refetch])
+
+  const live = useSessionSocket({
+    auth: { role: 'presenter', sessionId: session.id },
+    onConnectedRefetch: refetch,
+  })
+
+  const liveCount = live.connectedCount ?? snapshot?.connectedCount ?? null
+  const endedLive = live.ended || snapshot?.status === 'ENDED'
+
+  return (
+    <>
+      <PresenterDashboard
+        session={session}
+        pending={pending}
+        error={error}
+        onEnd={onEnd}
+        connection={live.status}
+        liveCount={liveCount}
+        degraded={live.degraded}
+        endedLive={endedLive}
+      />
+      <PresenterPolls sessionId={session.id} />
+      <PresenterWordPrompts sessionId={session.id} />
+    </>
+  )
+}
 
 export default function PresenterPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -84,7 +139,7 @@ export default function PresenterPage() {
         </div>
       ) : null}
       {view.kind === 'ready' ? (
-        <PresenterDashboard
+        <LivePresenter
           session={view.session}
           pending={pending}
           error={endError}

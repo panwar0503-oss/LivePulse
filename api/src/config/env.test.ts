@@ -60,6 +60,32 @@ describe('environment configuration', () => {
     )
   })
 
+  it('uses the documented live connection defaults when they are absent', () => {
+    const env = loadEnv(validEnv)
+    expect(env.PRESENCE_GRACE_MS).toBe(5000)
+    expect(env.SOCKET_MAX_PER_IP).toBe(20)
+    expect(env.SOCKET_MAX_PER_SESSION).toBe(500)
+  })
+
+  it('accepts tuned live connection limits within their ranges', () => {
+    const env = loadEnv({
+      ...validEnv,
+      PRESENCE_GRACE_MS: '0',
+      SOCKET_MAX_PER_IP: '1000',
+      SOCKET_MAX_PER_SESSION: '10000',
+    })
+    expect(env.PRESENCE_GRACE_MS).toBe(0)
+    expect(env.SOCKET_MAX_PER_IP).toBe(1000)
+    expect(env.SOCKET_MAX_PER_SESSION).toBe(10000)
+  })
+
+  it('rejects live connection limits outside their ranges or not whole numbers', () => {
+    expect(() => loadEnv({ ...validEnv, PRESENCE_GRACE_MS: '60001' })).toThrow(/PRESENCE_GRACE_MS/)
+    expect(() => loadEnv({ ...validEnv, PRESENCE_GRACE_MS: '1.5' })).toThrow(/PRESENCE_GRACE_MS/)
+    expect(() => loadEnv({ ...validEnv, SOCKET_MAX_PER_IP: '0' })).toThrow(/SOCKET_MAX_PER_IP/)
+    expect(() => loadEnv({ ...validEnv, SOCKET_MAX_PER_SESSION: '10001' })).toThrow(/SOCKET_MAX_PER_SESSION/)
+  })
+
   it('error message names every bad setting but never its value', () => {
     let message = ''
     try {

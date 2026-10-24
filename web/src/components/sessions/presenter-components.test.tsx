@@ -39,6 +39,59 @@ describe('presenter dashboard', () => {
     expect(html).not.toContain('End session')
   })
 
+  it('shows the live count in words people connected right now', () => {
+    const html = renderToStaticMarkup(
+      <PresenterDashboard
+        session={session}
+        pending={false}
+        onEnd={noop}
+        connection="connected"
+        liveCount={3}
+      />,
+    )
+    expect(html).toContain('people connected right now')
+    expect(html).toContain('Connected')
+    expect(html).toContain('people have joined')
+    expect(html).not.toMatch(/online/i)
+  })
+
+  it('shows an em dash and a plain message when the live count is unavailable', () => {
+    const html = renderToStaticMarkup(
+      <PresenterDashboard session={session} pending={false} onEnd={noop} liveCount={null} />,
+    )
+    expect(html).toContain('—')
+    expect(html).toContain('Count unavailable right now')
+  })
+
+  it('shows the degraded banner while live updates are delayed', () => {
+    const html = renderToStaticMarkup(
+      <PresenterDashboard session={session} pending={false} onEnd={noop} degraded />,
+    )
+    expect(html).toContain('Live updates may be delayed. Refresh if numbers look wrong.')
+  })
+
+  it('shows Reconnecting while the connection is down', () => {
+    const html = renderToStaticMarkup(
+      <PresenterDashboard session={session} pending={false} onEnd={noop} connection="reconnecting" />,
+    )
+    expect(html).toContain('Reconnecting…')
+  })
+
+  it('says the connection was refused when the server refuses it', () => {
+    const html = renderToStaticMarkup(
+      <PresenterDashboard session={session} pending={false} onEnd={noop} connection="refused" />,
+    )
+    expect(html).toContain('Connection refused')
+  })
+
+  it('hides the end control once the session has ended from a live notice', () => {
+    const html = renderToStaticMarkup(
+      <PresenterDashboard session={session} pending={false} onEnd={noop} endedLive />,
+    )
+    expect(html).toContain('This session has ended')
+    expect(html).not.toContain('End session')
+  })
+
   it('hides the end confirmation until the presenter asks', () => {
     const html = renderToStaticMarkup(<PresenterDashboard session={session} pending={false} onEnd={noop} />)
     expect(html).toContain('End session')

@@ -34,6 +34,11 @@ const envSchema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  // Delay before a participant's last disconnect lowers the presenter's count, so a refresh does not flicker it.
+  PRESENCE_GRACE_MS: z.coerce.number().int().min(0).max(60_000).default(5000),
+  // Open live connections allowed per client address, and per session on one instance.
+  SOCKET_MAX_PER_IP: z.coerce.number().int().min(1).max(1000).default(20),
+  SOCKET_MAX_PER_SESSION: z.coerce.number().int().min(1).max(10_000).default(500),
 })
 
 export type Env = z.infer<typeof envSchema>

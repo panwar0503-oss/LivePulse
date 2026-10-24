@@ -73,3 +73,19 @@ describe('health and readiness data', () => {
     expect(notReadyDetailsSchema.safeParse({ postgres: 'maybe', redis: 'up' }).success).toBe(false)
   })
 })
+
+describe('degraded readiness', () => {
+  it('accepts a degraded ready response when redis is down', () => {
+    const result = readyDataSchema.safeParse({
+      status: 'degraded',
+      checks: { postgres: 'up', redis: 'down' },
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects an unknown ready status', () => {
+    expect(
+      readyDataSchema.safeParse({ status: 'broken', checks: { postgres: 'up', redis: 'up' } }).success,
+    ).toBe(false)
+  })
+})

@@ -4,12 +4,14 @@ import {
   errorEnvelope,
   participantMeSchema,
   presenterSessionSchema,
+  presenterSessionStateSchema,
   publicSessionSchema,
   successEnvelope,
   type CreateSessionBody,
   type CreatedSession,
   type ParticipantMe,
   type PresenterSession,
+  type PresenterSessionState,
   type PublicSession,
 } from '@livepulse/shared'
 import { apiBaseUrl } from '../config'
@@ -55,10 +57,10 @@ const extractFields = (details: unknown): Record<string, string> | undefined => 
   return Object.keys(fields).length > 0 ? fields : undefined
 }
 
-const request = async <T extends z.ZodType>(
+export const request = async <T extends z.ZodType>(
   path: string,
   schema: T | null,
-  init: { method: 'GET' | 'POST'; body?: unknown },
+  init: { method: 'GET' | 'POST' | 'PATCH'; body?: unknown },
 ): Promise<ApiResult<z.infer<T>>> => {
   let response: Response
   try {
@@ -119,6 +121,11 @@ export const getParticipantMe = (roomCode: string): Promise<ApiResult<Participan
 
 export const getPresenterSession = (sessionId: string): Promise<ApiResult<PresenterSession>> =>
   request(`/api/sessions/${encodeURIComponent(sessionId)}`, presenterSessionSchema, { method: 'GET' })
+
+export const getPresenterState = (sessionId: string): Promise<ApiResult<PresenterSessionState>> =>
+  request(`/api/sessions/${encodeURIComponent(sessionId)}/state`, presenterSessionStateSchema, {
+    method: 'GET',
+  })
 
 export const presenterAccess = (sessionId: string, presenterKey: string): Promise<ApiResult<undefined>> =>
   request(`/api/sessions/${encodeURIComponent(sessionId)}/presenter-access`, null, {

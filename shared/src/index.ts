@@ -1,2 +1,5 @@
 export * from './schemas/api.js'
 export * from './schemas/sessions.js'
+export * from './schemas/polls.js'
+export * from './schemas/word-cloud.js'
+export * from './events/realtime.js'

@@ -14,8 +14,12 @@ export const createHealthRouter = (readiness: ReadinessChecker): Router => {
 
   router.get('/ready', async (_req, res) => {
     const report = await readiness.check()
-    if (report.postgres === 'up' && report.redis === 'up') {
-      const data: ReadyData = { status: 'ready', checks: { postgres: 'up', redis: 'up' } }
+    if (report.postgres === 'up') {
+      // Postgres is the source of truth; without Redis the API still serves HTTP, only live fan-out is lost.
+      const data: ReadyData =
+        report.redis === 'up'
+          ? { status: 'ready', checks: { postgres: 'up', redis: 'up' } }
+          : { status: 'degraded', checks: { postgres: 'up', redis: 'down' } }
       res.json({ success: true, data })
       return
     }

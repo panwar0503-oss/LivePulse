@@ -24,38 +24,53 @@ Legend: **P** presenter · **A** participant · **Pub** public. Phase in bracket
 
 ### Sessions & participants [3]
 
-| Method | Path                                     | Who    | Notes                                                                                                                                   |
-| ------ | ---------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/sessions`                              | Pub    | `{ title, description? }` → `201 { sessionId, roomCode, joinUrl, presenterKey }` + presenter cookie; rate limited 10 per IP per hour    |
-| GET    | `/sessions/:id`                          | P      | Presenter view: `{ id, title, description, roomCode, joinUrl, status, endedAt, participantCount }`; AI settings added later             |
-| GET    | `/sessions/by-code/:code`                | Pub    | `{ title, status, roomCode }` only; shares the join rate limit (20 per IP per minute)                                                   |
-| POST   | `/sessions/by-code/:code/join`           | Pub    | `{ displayName }` → `201` (`200` if this browser already joined) `{ participant, session }` + participant cookie                        |
-| GET    | `/sessions/by-code/:code/participant-me` | A      | Restores the participant view from the participant cookie: `200 { participant, session }`; `401` without a matching cookie              |
-| POST   | `/sessions/:id/presenter-access`         | Pub    | `{ presenterKey }` → `204` + presenter cookie; rate limited per session                                                                 |
-| POST   | `/sessions/:id/end`                      | P      | Ending is final; repeat call returns `200` with the same `endedAt`                                                                      |
-| GET    | `/sessions/:id/state`                    | P or A | Deferred to the realtime phase. Full snapshot for (re)connect: active poll, results if allowed, open prompt, questions, reaction totals |
-| GET    | `/sessions/:id/participants`             | P      | Deferred to the realtime phase                                                                                                          |
-| PATCH  | `/sessions/:id/settings`                 | P      | `{ aiEnabled?, qnaOpen?, aiModeration? }` [7/9]                                                                                         |
+| Method | Path                                     | Who | Notes                                                                                                                                                                                                                                                                                                                                                  |
+| ------ | ---------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/sessions`                              | Pub | `{ title, description? }` → `201 { sessionId, roomCode, joinUrl, presenterKey }` + presenter cookie; rate limited 10 per IP per hour                                                                                                                                                                                                                   |
+| GET    | `/sessions/:id`                          | P   | Presenter view: `{ id, title, description, roomCode, joinUrl, status, endedAt, participantCount }`; AI settings added later                                                                                                                                                                                                                            |
+| GET    | `/sessions/by-code/:code`                | Pub | `{ title, status, roomCode }` only; shares the join rate limit (20 per IP per minute)                                                                                                                                                                                                                                                                  |
+| POST   | `/sessions/by-code/:code/join`           | Pub | `{ displayName }` → `201` (`200` if this browser already joined) `{ participant, session }` + participant cookie                                                                                                                                                                                                                                       |
+| GET    | `/sessions/by-code/:code/participant-me` | A   | Restores the participant view from the participant cookie: `200 { participant, session }`; `401` without a matching cookie                                                                                                                                                                                                                             |
+| POST   | `/sessions/:id/presenter-access`         | Pub | `{ presenterKey }` → `204` + presenter cookie; rate limited per session                                                                                                                                                                                                                                                                                |
+| POST   | `/sessions/:id/end`                      | P   | Ending is final; repeat call returns `200` with the same `endedAt`                                                                                                                                                                                                                                                                                     |
+| GET    | `/sessions/:id/state`                    | P   | Presenter snapshot for (re)connect: `200 { id, title, roomCode, status, endedAt, joinedCount, connectedCount: number \| null }`; `connectedCount` is `null` when the live count cannot be read; `401` without a matching presenter cookie; `404` NOT_FOUND; `400` bad id. Never the key or hash. Poll, prompt and question fields join in later phases |
+| GET    | `/sessions/:id/participants`             | P   | Deferred to the realtime phase                                                                                                                                                                                                                                                                                                                         |
+| PATCH  | `/sessions/:id/settings`                 | P   | `{ aiEnabled?, qnaOpen?, aiModeration? }` [7/9]                                                                                                                                                                                                                                                                                                        |
 
 ### Polls & votes [5]
 
-| Method | Path                  | Who    | Notes                                                                  |
-| ------ | --------------------- | ------ | ---------------------------------------------------------------------- |
-| POST   | `/sessions/:id/polls` | P      | `{ question, options[2–6], showResults, sourceSuggestionId? }` → DRAFT |
-| POST   | `/polls/:id/start`    | P      | DRAFT → ACTIVE; `409` if another poll is active                        |
-| POST   | `/polls/:id/close`    | P      | ACTIVE → CLOSED                                                        |
-| PATCH  | `/polls/:id`          | P      | `{ showResults }`                                                      |
-| POST   | `/polls/:id/votes`    | A      | `{ optionId }` → `201`; duplicate → `409 VOTE_ALREADY_RECORDED`        |
-| GET    | `/polls/:id/results`  | P or A | Visibility enforced server-side                                        |
+| Method | Path                                    | Who | Notes                                                                                                                                                                                                                                                                                                   |
+| ------ | --------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/sessions/:id/polls`                   | P   | `{ question, options[2–6], showResults? }` → `201` `PresenterPoll` (DRAFT). `400` lengths, count, empty or duplicate labels (trimmed, case-insensitive); `409 SESSION_ENDED`; `409 POLL_LIMIT_REACHED` (50 per session); rate limited 60 per IP per minute                                              |
+| GET    | `/sessions/:id/polls`                   | P   | `200 { polls }`: every poll in the session, drafts included, with counts and percentages                                                                                                                                                                                                                |
+| POST   | `/polls/:id/start`                      | P   | DRAFT → ACTIVE. `200` `PresenterPoll`. `409 POLL_NOT_DRAFT` (already started or closed); `409 POLL_ALREADY_ACTIVE` (another poll is open); `409 SESSION_ENDED`                                                                                                                                          |
+| POST   | `/polls/:id/close`                      | P   | ACTIVE → CLOSED. `200` `PresenterPoll`. Closing an already closed poll returns `200` unchanged. `409 POLL_NOT_ACTIVE` on a draft                                                                                                                                                                        |
+| PATCH  | `/polls/:id`                            | P   | `{ showResults }` → `200` `PresenterPoll`. Allowed on draft, open and closed polls; the question and options stay fixed. `400` on a bad body                                                                                                                                                            |
+| POST   | `/polls/:id/votes`                      | A   | Participant of the poll's session. `{ optionId }` → `201 { pollId, myOptionId }`. `400 INVALID_OPTION`; `401 PARTICIPANT_AUTH_REQUIRED`; `404` unknown or draft poll; `409 POLL_NOT_ACTIVE` (closed, including when the session ended); `409 VOTE_ALREADY_RECORDED`; rate limited 300 per IP per minute |
+| GET    | `/sessions/by-code/:code/polls/current` | A   | `200 { poll }`: the open poll, else the most recently closed poll, else `null`. Never a draft. `results` is `null` while `showResults` is false                                                                                                                                                         |
+
+Polls are HTTP only: votes are not socket commands. Every `/polls/:id` route takes the session from the poll row and
+checks the presenter or participant cookie for that session, never a session id from the request. `PresenterPoll` is `{ id, question, status, showResults, closedAt, options, results }`;
+`ParticipantPoll` is `{ id, question, status, showResults, closedAt, options, myOptionId, results }`;
+`PollResults` is `{ total, version, options: [{ id, count, pct }] }`, where `version` is the total vote count and
+`pct` is rounded to one decimal place.
 
 ### Word cloud [6]
 
-| Method | Path                          | Who    | Notes                                        |
-| ------ | ----------------------------- | ------ | -------------------------------------------- |
-| POST   | `/sessions/:id/word-prompts`  | P      | `{ prompt }` → OPEN (closes any open prompt) |
-| POST   | `/word-prompts/:id/close`     | P      |                                              |
-| POST   | `/word-prompts/:id/responses` | A      | `{ text }` → `201`; second → `409`           |
-| GET    | `/word-prompts/:id/cloud`     | P or A | `{ items: [{ word, count }] }` top-N         |
+| Method | Path                                           | Who | Notes                                                                                                                                                                                                                                                                                                                                                                              |
+| ------ | ---------------------------------------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/sessions/:id/word-prompts`                   | P   | `{ question, showCloud? }` → `201` `PresenterWordPrompt` (DRAFT). `400` on the question; `409 SESSION_ENDED`; `409 PROMPT_LIMIT_REACHED` (50 per session); rate limited 60 per IP per minute                                                                                                                                                                                       |
+| GET    | `/sessions/:id/word-prompts`                   | P   | `200 { prompts }`: every prompt in the session, drafts included, each with its cloud                                                                                                                                                                                                                                                                                               |
+| POST   | `/word-prompts/:id/start`                      | P   | DRAFT → ACTIVE. `200` `PresenterWordPrompt`. Closes the session's open prompt first, in the same transaction. `409 PROMPT_NOT_DRAFT` (already started or closed); `409 SESSION_ENDED`                                                                                                                                                                                              |
+| POST   | `/word-prompts/:id/close`                      | P   | ACTIVE → CLOSED. `200` `PresenterWordPrompt`. Closing an already closed prompt returns `200` unchanged. `409 PROMPT_NOT_ACTIVE` on a draft                                                                                                                                                                                                                                         |
+| PATCH  | `/word-prompts/:id`                            | P   | `{ showCloud }` → `200` `PresenterWordPrompt`. Allowed on draft, open and closed prompts. `400` on a bad body                                                                                                                                                                                                                                                                      |
+| POST   | `/word-prompts/:id/responses`                  | A   | Participant of the prompt's session (checked before the body). `{ text }` → `201 { promptId, myWord }`, no counts. `400` on field `text` (empty, or more than 30 characters); `401 PARTICIPANT_AUTH_REQUIRED`; `404` unknown or draft prompt; `409 PROMPT_NOT_ACTIVE` (closed, including when the session ended); `409 WORD_ALREADY_SUBMITTED`; rate limited 300 per IP per minute |
+| GET    | `/sessions/by-code/:code/word-prompts/current` | A   | `200 { prompt }`: the open prompt, else the most recently closed one, else `null`. Never a draft. `cloud` is `null` while `showCloud` is false                                                                                                                                                                                                                                     |
+
+Word cloud DTOs: `PresenterWordPrompt` is `{ id, question, status, showCloud, closedAt, cloud }`;
+`ParticipantWordPrompt` is `{ id, question, status, showCloud, closedAt, myWord, cloud }`; `WordCloud` is
+`{ total, version, entries: [{ key, word, count }] }`, at most 30 entries, ordered by count descending then `key`.
+`version` is the total response count (answers are final). The cloud is computed in PostgreSQL; no separate cloud endpoint exists.
 
 ### Q&A [7]
 
@@ -100,7 +115,7 @@ per-minute timeline.
 
 ### Ops
 
-`GET /health` (liveness) · `GET /ready` (`503` if PostgreSQL or required Redis is down; AI status informational).
+`GET /health` (liveness) · `GET /ready`: `200 { status: 'ready', checks }` when all up; `200 { status: 'degraded', checks: { postgres: 'up', redis: 'down' } }` when only Redis is down (live updates degraded, HTTP still served); `503` when PostgreSQL is down. AI status informational.
 
 ## 3. Status codes
 
