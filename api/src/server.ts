@@ -7,6 +7,7 @@ import { loadEnv, type Env } from './config/env.js'
 import { createLogger } from './config/logger.js'
 import { createRedisClients, REDIS_STARTUP_ERROR } from './db/redis.js'
 import { closeSequelize, createSequelize } from './db/sequelize.js'
+import { initModels } from './models/index.js'
 import { createReadinessChecker } from './services/readiness.service.js'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
@@ -58,7 +59,8 @@ const main = async (): Promise<void> => {
   }
 
   const readiness = createReadinessChecker({ sequelize, redis: redis.client, logger })
-  const app = createApp({ env, logger, readiness })
+  const models = initModels(sequelize)
+  const app = createApp({ env, logger, readiness, sequelize, models })
   const server: Server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT }, 'api listening')
   })

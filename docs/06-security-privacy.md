@@ -8,6 +8,7 @@ token leakage (logs, URLs, errors) · CORS misconfiguration · SQL injection · 
 false success when a write fails.
 
 **AI-specific:**
+
 - **Prompt injection** via questions, word responses, or uploaded documents ("ignore previous instructions…").
 - **Data exfiltration** across sessions through retrieval (chunks from session A answering session B).
 - **Hallucinated answers** presented as facts.
@@ -18,20 +19,30 @@ false success when a write fails.
 - **Secret leakage**: API key in logs, client bundles, or error messages.
 
 ## 2. Controls — core
+
 1. Room codes from a CSPRNG; unique constraint + bounded retry.
-2. Presenter key and participant tokens: high-entropy, server-generated, stored as hashes, compared in constant
-   time, scoped to one session, never in URLs or logs.
+2. Presenter key and participant tokens: 32 random bytes (256 bits) from `crypto.randomBytes`, stored as SHA-256
+   hashes (an unsalted hash is enough at this entropy), compared with `crypto.timingSafeEqual`, scoped to one
+   session, never in URLs or logs.
 3. Zod validation on every REST and socket payload; body size limits.
 4. Parameterised Sequelize queries only (including vector queries).
 5. DB unique constraints for votes, upvotes, word responses; option-belongs-to-poll composite FK.
-6. Rate limits per IP and per participant: join, vote, word, question, upvote, reaction, AI endpoints.
+6. Rate limits per IP and per participant: join, vote, word, question, upvote, reaction, AI endpoints. Sessions
+   phase limits are in-memory fixed windows per process (create 10/IP/hour, join and public lookup 20/IP/minute,
+   presenter-key attempts 10/session/15 minutes); several API instances need a shared (Redis) store.
 7. Helmet; strict CORS allowlist (`WEB_ORIGIN`); same allowlist for Socket.IO.
 8. React text nodes only; no `dangerouslySetInnerHTML` (AI output included; render Markdown, if ever, with a
    sanitising renderer that disallows HTML).
 9. Generic public errors; detailed internal logs with request IDs; never log tokens, keys, or full payloads.
 10. Result visibility, room membership, and lifecycle checks enforced on the server.
+11. Cookie-based identity: one cookie per session and role (`lp_presenter_<sessionId>`, `lp_participant_<sessionId>`),
+    `HttpOnly`, `SameSite=Lax`, `Path=/api`, 7-day max age, `Secure` only in production. Page scripts cannot read
+    them; the request logger redacts the `cookie` header.
+12. Origin check on every POST: an `Origin` that is not in `WEB_ORIGIN` gets `403 FORBIDDEN_ORIGIN`, on top of
+    `SameSite=Lax` and JSON-only bodies (CSRF defence).
 
 ## 3. Controls — AI
+
 1. **Untrusted-input fencing:** audience text and document chunks are wrapped in labelled delimiters; the system
    prompt says content inside is data, not instructions.
 2. **No authority for the model in audience-triggered flows:** the Q&A graph and insights chains have no
@@ -55,12 +66,14 @@ false success when a write fails.
 12. **Data minimisation:** don't send display names or tokens to the LLM; send only the text needed.
 
 ## 4. Privacy
+
 - Personal data: display names and free text the audience types. No email, phone, location.
 - When `AI_PROVIDER=anthropic`, audience text and uploaded material are sent to Anthropic for processing. The
   presenter must enable AI per session and sees this notice; participants see "AI-assisted session" on join.
 - README states the prototype is for demo use, has no formal security audit, and should not use sensitive data.
 
 ## 5. Limitations to disclose
+
 Anonymous tokens ≠ identity verification · room code ≠ authorization · presenter key is a bearer secret (no
 accounts) · Redis Pub/Sub not durable · in-memory reaction aggregation and rate limits are per instance unless
 moved to Redis · LLM output can still be wrong even when grounded — that is why the presenter approves · no

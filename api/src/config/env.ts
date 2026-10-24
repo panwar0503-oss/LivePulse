@@ -22,7 +22,17 @@ const envSchema = z.object({
     )
     .pipe(z.array(z.string().refine(isHttpOrigin)).min(1)),
   DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//),
+  // Only the integration suite reads this; it refuses any database whose name does not end in _test.
+  TEST_DATABASE_URL: z
+    .string()
+    .regex(/^postgres(ql)?:\/\//)
+    .optional(),
   REDIS_URL: z.string().regex(/^rediss?:\/\//),
+  // Set to true only behind a reverse proxy, so req.ip is the client address used for rate limiting.
+  TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 })
 

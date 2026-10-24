@@ -1,9 +1,11 @@
 import type { Express } from 'express'
 import { pino } from 'pino'
+import { Sequelize } from 'sequelize'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../../src/app.js'
 import type { Env } from '../../src/config/env.js'
+import { initModels } from '../../src/models/index.js'
 import type { DependencyStatus, ReadinessChecker } from '../../src/services/readiness.service.js'
 
 const env: Env = {
@@ -12,14 +14,22 @@ const env: Env = {
   WEB_ORIGIN: ['http://localhost:3000'],
   DATABASE_URL: 'postgres://stub',
   REDIS_URL: 'redis://stub',
+  TRUST_PROXY: false,
   LOG_LEVEL: 'fatal',
 }
+
+// These tests never reach a session route, so a Sequelize that never connects is enough.
+const sequelize = new Sequelize('postgres://stub@localhost:1/stub_test', {
+  dialect: 'postgres',
+  logging: false,
+})
+const models = initModels(sequelize)
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const buildApp = (postgres: DependencyStatus = 'up', redis: DependencyStatus = 'up'): Express => {
   const readiness: ReadinessChecker = { check: async () => ({ postgres, redis }) }
-  return createApp({ env, logger: pino({ level: 'silent' }), readiness })
+  return createApp({ env, logger: pino({ level: 'silent' }), readiness, sequelize, models })
 }
 
 describe('health endpoint', () => {

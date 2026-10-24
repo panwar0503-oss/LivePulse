@@ -8,7 +8,9 @@
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "db:migrate": "sequelize-cli db:migrate",
+    "db:migration:generate": "sequelize-cli migration:generate --name",
     "db:migrate:status": "sequelize-cli db:migrate:status",
     "db:migrate:undo": "sequelize-cli db:migrate:undo"
   },

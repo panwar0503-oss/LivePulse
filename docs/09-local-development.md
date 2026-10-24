@@ -1,6 +1,7 @@
 # 09 — Local Development and Troubleshooting
 
 ## Prerequisites
+
 Node.js LTS + npm · Docker Desktop (Compose) · Git. Optional: Anthropic API key (only for real AI; the `fake`
 provider works offline) · Claude Desktop (MCP demo).
 
@@ -9,20 +10,24 @@ node --version && npm --version && docker compose version && git --version
 ```
 
 ## Docker Compose services (Phase 2)
+
 - `postgres`: image `pgvector/pgvector:pg16` (PostgreSQL with pgvector), named volume, health check.
 - `redis`: `redis:7`, health check.
 - Development-only credentials from `.env` or documented local defaults; never reused in public deployments.
 
 ## Environment (`.env.example`, placeholders only)
+
 ```dotenv
 NODE_ENV=development
 PORT=4000
 WEB_ORIGIN=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:4000
 DATABASE_URL=postgres://livepulse:change_me@localhost:5432/livepulse
+TEST_DATABASE_URL=postgres://livepulse:change_me@localhost:5432/livepulse_test  # integration tests only
 REDIS_URL=redis://localhost:6379
 REDIS_REQUIRED=true
 LOG_LEVEL=debug
+TRUST_PROXY=false                # true only behind a reverse proxy (affects req.ip)
 
 # AI (Phase 9+)
 AI_ENABLED=true
@@ -43,26 +48,39 @@ KNOWLEDGE_MAX_UPLOAD_MB=10
 # LIVEPULSE_API_URL=http://localhost:4000
 # LIVEPULSE_PRESENTER_KEY=
 ```
+
 Env is validated with Zod at startup; missing/invalid values fail fast with a clear message (no secret values
 printed). `ANTHROPIC_API_KEY` is required only when `AI_PROVIDER=anthropic`.
 
 ## Scripts
+
 None exist yet. Phase 2 defines them; read root and workspace `package.json` before running anything. Expected
 shape (illustrative): `dev`, `build`, `lint`, `test`, `db:migrate`, `db:migrate:undo`, `db:seed:demo`, and later
 `dev:api:second` (second instance), `mcp` (MCP server), `eval:ai` (opt-in real-model eval).
 
 ## Startup workflow (after Phase 2)
+
 1. `cp .env.example .env` and set local values.
 2. `docker compose up -d`
 3. `npm install`
-4. `npm run db:migrate -w api`
-5. `npm run dev`
+4. `npm run db:migrate -w api` (once per dev database; the API cannot serve sessions until it has run)
+5. Start the API and the web app in two terminals: `npm run dev:api` and `npm run dev:web`
 6. Open `http://localhost:3000`; check `http://localhost:4000/health` and `/ready`.
 
 The first `local` embeddings call downloads the model (~tens of MB) and caches it; run it once before an offline
 demo.
 
+## Test database
+
+Integration tests use their own database and never `DATABASE_URL`.
+
+1. Create it once: `docker compose exec postgres psql -U livepulse -d livepulse -c "CREATE DATABASE livepulse_test;"`
+2. Set `TEST_DATABASE_URL` in `.env` (see `.env.example`). The name must end in `_test`.
+3. `npm test -w api` runs the fast unit tests (no database). `npm run test:integration -w api` migrates and
+   runs against the test database only; it refuses to start unless `NODE_ENV=test` and the name ends in `_test`.
+
 ## Troubleshooting
+
 - **PostgreSQL refused / `type "vector" does not exist`** — check `docker compose ps`, `DATABASE_URL`, and that the
   image is `pgvector/pgvector`; run migrations (they create the extension).
 - **Redis refused** — container status, `REDIS_URL`, backend logs for pub/sub connection errors.

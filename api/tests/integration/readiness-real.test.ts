@@ -4,12 +4,13 @@ import { Sequelize } from 'sequelize'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createReadinessChecker } from '../../src/services/readiness.service.js'
 
-const databaseUrl = process.env.DATABASE_URL
+// The integration suite only ever connects to the test database (global setup has already checked it).
+const databaseUrl = process.env.TEST_DATABASE_URL
 const redisUrl = process.env.REDIS_URL
 const hasServices = Boolean(databaseUrl && redisUrl)
 
 if (!hasServices) {
-  console.warn('Skipping real readiness tests: DATABASE_URL and REDIS_URL must both be set.')
+  console.warn('Skipping real readiness tests: TEST_DATABASE_URL and REDIS_URL must both be set.')
 }
 
 describe.skipIf(!hasServices)('readiness against real Postgres and Redis', () => {

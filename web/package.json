@@ -16,6 +16,8 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
+    "@livepulse/shared": "*",
+    "zod": "^3.23.8",
     "@tailwindcss/postcss": "^4.3.3",
     "next": "^15.5.28",
     "postcss": "^8.5.31",

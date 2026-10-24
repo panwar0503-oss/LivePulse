@@ -10,15 +10,9 @@ describe('landing page', () => {
     expect(html).toContain('LivePulse')
   })
 
-  it('marks the session actions as unavailable in this release', () => {
-    const buttons = html.match(/<button[^>]*>[^<]*<\/button>/g) ?? []
-    expect(buttons).toHaveLength(2)
-    for (const button of buttons) {
-      expect(button).toContain('disabled=""')
-      expect(button).toContain('aria-disabled="true"')
-    }
-    expect(buttons[0]).toContain('Create session')
-    expect(buttons[1]).toContain('Join session')
-    expect(html).toContain('Available in a later release')
+  it('offers real links to create and join a session', () => {
+    expect(html).toMatch(/<a[^>]*href="\/create"[^>]*>Create a session<\/a>/)
+    expect(html).toMatch(/<a[^>]*href="\/join"[^>]*>Join a session<\/a>/)
+    expect(html).not.toContain('disabled')
   })
 })

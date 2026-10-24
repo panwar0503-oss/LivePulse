@@ -45,6 +45,21 @@ describe('environment configuration', () => {
     expect(() => loadEnv({ ...validEnv, WEB_ORIGIN: 'ftp://example.com' })).toThrow(/WEB_ORIGIN/)
   })
 
+  it('trusts a reverse proxy only when explicitly enabled', () => {
+    expect(loadEnv(validEnv).TRUST_PROXY).toBe(false)
+    expect(loadEnv({ ...validEnv, TRUST_PROXY: 'true' }).TRUST_PROXY).toBe(true)
+    expect(() => loadEnv({ ...validEnv, TRUST_PROXY: 'yes' })).toThrow(/TRUST_PROXY/)
+  })
+
+  it('accepts an optional test database URL but rejects a non-postgres one', () => {
+    expect(loadEnv(validEnv).TEST_DATABASE_URL).toBeUndefined()
+    const testUrl = 'postgresql://user:pw@localhost:5432/livepulse_test'
+    expect(loadEnv({ ...validEnv, TEST_DATABASE_URL: testUrl }).TEST_DATABASE_URL).toBe(testUrl)
+    expect(() => loadEnv({ ...validEnv, TEST_DATABASE_URL: 'mysql://localhost/db' })).toThrow(
+      /TEST_DATABASE_URL/,
+    )
+  })
+
   it('error message names every bad setting but never its value', () => {
     let message = ''
     try {
