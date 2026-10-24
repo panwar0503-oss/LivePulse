@@ -2,6 +2,7 @@
 
 Live audience engagement **prototype** (polls, Q&A, reactions), inspired by StreamAlive. Web + backend only — no mobile.
 Phase 1 (workflow setup) done; no app code yet. Don't start a new phase without explicit approval.
+Phase roadmap: `docs/08-implementation-plan.md`; copy-paste phase prompts: `docs/11-phase-prompts.md`.
 
 **Code is liability:** write the minimum that meets the requirement. Tests describe business behaviour.
 
@@ -9,6 +10,9 @@ Phase 1 (workflow setup) done; no app code yet. Don't start a new phase without 
 - Stack: `api/` Express + TS + **Sequelize** (no other ORM) + PostgreSQL + Socket.IO with `@socket.io/redis-adapter` ·
   `web/` Next.js (App Router) + React + TS + Tailwind · `shared/` Zod schemas + socket event contracts ·
   Vitest + Supertest · Docker Compose (Postgres, Redis). npm workspaces at the root.
+- AI (Phase 9+, `docs/10-ai-architecture.md`): Claude via LangChain.js, LangGraph.js for multi-step flows, local
+  embeddings, **pgvector in PostgreSQL** (no separate vector DB), MCP server as a REST client. AI runs as background
+  jobs after commit, only drafts (presenter approves), and tests use the `fake` provider — no network.
 - PostgreSQL is the source of truth. Redis Pub/Sub is not durable: persist, commit, then emit; clients re-fetch
   over HTTP on reconnect.
 - Zod-validate all untrusted input (HTTP + socket); authorize on the server, never trust the client.
