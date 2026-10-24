@@ -1,0 +1,39 @@
+{
+  "name": "@livepulse/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "sequelize-cli db:migrate",
+    "db:migrate:status": "sequelize-cli db:migrate:status",
+    "db:migrate:undo": "sequelize-cli db:migrate:undo"
+  },
+  "dependencies": {
+    "@livepulse/shared": "*",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "cors": "^2.8.5",
+    "express": "^5.0.0",
+    "helmet": "^8.0.0",
+    "pg": "^8.11.0",
+    "pino": "^9.0.0",
+    "redis": "^4.7.0",
+    "sequelize": "^6.37.0",
+    "socket.io": "^4.8.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/supertest": "^6.0.0",
+    "sequelize-cli": "^6.6.0",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
