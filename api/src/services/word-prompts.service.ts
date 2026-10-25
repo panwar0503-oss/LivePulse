@@ -178,7 +178,7 @@ export async function createWordPrompt(
 
 /**
  * Lock order: session FOR UPDATE (queues concurrent starts in one session), then target prompt
- * FOR UPDATE, then UPDATE of the open prompt (waits for submissions holding it FOR SHARE), then
+ * FOR UPDATE, then the open prompt FOR UPDATE (waits for submissions holding it FOR SHARE) and its UPDATE, then
  * UPDATE of the target. The open prompt is closed first, so the one-active index cannot fire.
  */
 export async function startWordPrompt(
@@ -197,6 +197,12 @@ export async function startWordPrompt(
     if (locked.status !== 'DRAFT') {
       throw new AppError(409, 'PROMPT_NOT_DRAFT', 'This prompt has already been opened or closed.')
     }
+    // A blocked UPDATE evaluates clock_timestamp() before waiting, so the open prompt is locked first
+    // (waiting for submissions in flight); closed_at is then never earlier than an answer committed meanwhile.
+    await deps.sequelize.query(
+      "SELECT id FROM word_prompts WHERE session_id = :sessionId AND status = 'ACTIVE' FOR UPDATE",
+      { replacements: { sessionId }, type: QueryTypes.SELECT, transaction },
+    )
     const closedRows = await deps.sequelize.query<{ id: string; closed_at: Date }>(
       "UPDATE word_prompts SET status = 'CLOSED', closed_at = clock_timestamp(), " +
         "updated_at = clock_timestamp() WHERE session_id = :sessionId AND status = 'ACTIVE' " +

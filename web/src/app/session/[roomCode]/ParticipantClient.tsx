@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ParticipantMe } from '@livepulse/shared'
 import { LiveParticipantPoll } from '../../../components/polls/LiveParticipantPoll'
+import { LiveParticipantQna } from '../../../components/qna/LiveParticipantQna'
 import { LiveParticipantWordPrompt } from '../../../components/word-cloud/LiveParticipantWordPrompt'
 import { JoinForm } from '../../../components/sessions/JoinForm'
 import { ParticipantView } from '../../../components/sessions/ParticipantView'
 import { StatusMessage } from '../../../components/sessions/StatusMessage'
+import { Card } from '../../../components/ui/Card'
+import { Tabs, type TabItem } from '../../../components/ui/Tabs'
+import { button, pageTitleClass, panelClass } from '../../../components/ui/styles'
 import { getParticipantMe, joinSession } from '../../../lib/api/sessions'
 import { useSessionSocket } from '../../../realtime/use-session-socket'
 
@@ -16,6 +20,12 @@ type View =
   | { kind: 'needsJoin' }
   | { kind: 'notFound' }
   | { kind: 'error'; message: string }
+
+const PARTICIPANT_TABS: TabItem[] = [
+  { id: 'poll', label: 'Poll' },
+  { id: 'words', label: 'Words' },
+  { id: 'questions', label: 'Questions' },
+]
 
 type ParticipantClientProps = { roomCode: string }
 
@@ -28,10 +38,17 @@ function LiveParticipant({ roomCode, me, onRefetch }: LiveParticipantProps) {
     onConnectedRefetch: onRefetch,
   })
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 sm:gap-8">
       <ParticipantView me={me} connection={live.status} endedLive={live.ended} />
-      <LiveParticipantPoll roomCode={roomCode} />
-      <LiveParticipantWordPrompt roomCode={roomCode} />
+      <Tabs tabs={PARTICIPANT_TABS} label="Activities" idPrefix="participant">
+        {(id) => (
+          <Card>
+            {id === 'poll' ? <LiveParticipantPoll roomCode={roomCode} /> : null}
+            {id === 'words' ? <LiveParticipantWordPrompt roomCode={roomCode} /> : null}
+            {id === 'questions' ? <LiveParticipantQna roomCode={roomCode} /> : null}
+          </Card>
+        )}
+      </Tabs>
     </div>
   )
 }
@@ -83,8 +100,8 @@ export function ParticipantClient({ roomCode }: ParticipantClientProps) {
       return <LiveParticipant roomCode={roomCode} me={view.me} onRefetch={refetch} />
     case 'needsJoin':
       return (
-        <div className="flex flex-col gap-4">
-          <h1 className="text-3xl font-bold">Join this session</h1>
+        <div className={panelClass}>
+          <h1 className={pageTitleClass}>Join this session</h1>
           <JoinForm
             initialRoomCode={roomCode}
             pending={pending}
@@ -105,11 +122,7 @@ export function ParticipantClient({ roomCode }: ParticipantClientProps) {
         <div className="flex flex-col gap-3">
           <StatusMessage kind="error">{view.message}</StatusMessage>
           <div>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="rounded bg-blue-700 px-4 py-2 font-medium text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700"
-            >
+            <button type="button" onClick={() => void load()} className={button('primary')}>
               Try again
             </button>
           </div>

@@ -11,7 +11,7 @@ const constraintOf = (error: unknown): unknown =>
 
 /**
  * Lock order: prompt FOR SHARE only (no session lock). Concurrent submissions do not block each other;
- * close and end take the prompt FOR UPDATE (or UPDATE it), so they wait for submissions in flight and
+ * close, start and end take the prompt FOR UPDATE, so they wait for submissions in flight and
  * later submissions see CLOSED. The caller has already checked that participantId belongs to the
  * prompt's session. `text` is the raw input: it is normalised here so the key is always computed the same way.
  */
@@ -43,7 +43,7 @@ export async function submitWord(
         throw new AppError(409, 'PROMPT_NOT_ACTIVE', 'This prompt is closed.')
       }
       await WordResponse.create(
-        { promptId, participantId, normalizedWord: key, displayWord: display, createdAt: new Date() },
+        { promptId, participantId, normalizedWord: key, displayWord: display },
         { transaction },
       )
     })

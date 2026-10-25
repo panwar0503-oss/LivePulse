@@ -11,6 +11,7 @@ import { generateRoomCode } from '../../src/lib/room-code.js'
 import { hashToken, generateToken } from '../../src/lib/tokens.js'
 import { initModels, type Models } from '../../src/models/index.js'
 import { createLoadPollResults } from '../../src/realtime/polls.js'
+import { createLoadQuestion, createLoadQuestionUpvotes } from '../../src/realtime/questions.js'
 import { createLoadWordCloud } from '../../src/realtime/word-cloud.js'
 import { createReadinessChecker } from '../../src/services/readiness.service.js'
 import { createRealtime, SOCKET_PATH, type Realtime, type RealtimeDeps } from '../../src/realtime/index.js'
@@ -61,6 +62,8 @@ export type HarnessOptions = {
   pollCombineMs?: number
   /** Shorter word-cloud combining window so tests stay fast. */
   wordCloudCombineMs?: number
+  /** Shorter upvote-count combining window so tests stay fast. */
+  questionCombineMs?: number
 }
 
 export const startRealtimeServer = async (
@@ -74,6 +77,7 @@ export const startRealtimeServer = async (
     realReadiness = false,
     pollCombineMs,
     wordCloudCombineMs,
+    questionCombineMs,
   }: HarnessOptions = {},
 ): Promise<RealtimeHarness> => {
   const sequelize = createTestSequelize()
@@ -94,6 +98,9 @@ export const startRealtimeServer = async (
     ...(pollCombineMs === undefined ? {} : { pollCombineMs }),
     loadWordCloud: createLoadWordCloud({ sequelize, models }),
     ...(wordCloudCombineMs === undefined ? {} : { wordCloudCombineMs }),
+    loadQuestion: createLoadQuestion({ sequelize, models }),
+    loadQuestionUpvotes: createLoadQuestionUpvotes({ sequelize, models }),
+    ...(questionCombineMs === undefined ? {} : { questionCombineMs }),
   })
   if (withApp) {
     const app = createApp({

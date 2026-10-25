@@ -1,7 +1,13 @@
 import type { Request, RequestHandler, Response } from 'express'
 import type { Logger } from 'pino'
 import type { Sequelize } from 'sequelize'
-import type { CreateSessionBody, CreatedSession, JoinBody, PresenterAccessBody } from '@livepulse/shared'
+import type {
+  CreateSessionBody,
+  CreatedSession,
+  JoinBody,
+  PresenterAccessBody,
+  UpdateQnaSettingsBody,
+} from '@livepulse/shared'
 import { describeError } from '../db/redis.js'
 import { participantCookieName, parseCookies, presenterCookieName, serializeCookie } from '../lib/cookies.js'
 import type { Realtime } from '../realtime/index.js'
@@ -15,6 +21,7 @@ import {
   findSessionIdByCode,
   getPresenterSession,
   getPresenterState,
+  setQnaOpen,
   toPresenterSession,
   toPublicSession,
   type SessionModels,
@@ -26,10 +33,12 @@ export type SessionsControllerDeps = {
   realtime: Pick<Realtime, 'emitSessionEnded' | 'countConnected'> & {
     polls: Pick<Realtime['polls'], 'emitPollClosed' | 'emitResultsNow'>
     wordCloud: Pick<Realtime['wordCloud'], 'emitWordPromptClosed' | 'emitCloudNow'>
+    questions: Pick<Realtime['questions'], 'emitQnaStatus'>
   }
   logger: Logger
   webOrigin: string
   secureCookies: boolean
+  aiSessionTokenBudget?: number
 }
 
 const COOKIE_MAX_AGE_SECONDS = 7 * 24 * 3600
@@ -42,7 +51,15 @@ const readCookie = (req: Request, name: string): string | undefined => parseCook
 const param = (req: Request, name: 'id' | 'code'): string => String(req.params[name])
 
 type SessionsController = Record<
-  'create' | 'getByCode' | 'join' | 'participantMe' | 'getPresenter' | 'getState' | 'presenterAccess' | 'end',
+  | 'create'
+  | 'getByCode'
+  | 'join'
+  | 'participantMe'
+  | 'getPresenter'
+  | 'getState'
+  | 'presenterAccess'
+  | 'end'
+  | 'updateSettings',
   RequestHandler
 >
 
@@ -141,8 +158,20 @@ export const createSessionsController = (deps: SessionsControllerDeps): Sessions
   const end: RequestHandler = async (req, res) => {
     const id = param(req, 'id')
     // Authorise first, then end; the response re-reads so the count and status are current.
-    await getPresenterSession(deps, id, readCookie(req, presenterCookieName(id)))
+    const before = await getPresenterSession(deps, id, readCookie(req, presenterCookieName(id)))
+    const qnaWasOpen = before.session.qnaOpen
     const { session, closedPoll, closedPrompt } = await endSession(deps, id)
+    // Q&A closed in the same commit as the end; the notice uses the value read before it.
+    if (qnaWasOpen) {
+      try {
+        deps.realtime.questions.emitQnaStatus(session.id, false)
+      } catch (err) {
+        deps.logger.warn(
+          { sessionId: session.id, realtimeError: describeError(err) },
+          'qna status emit failed',
+        )
+      }
+    }
     if (closedPrompt) {
       try {
         await deps.realtime.wordCloud.emitCloudNow(closedPrompt.id)
@@ -180,5 +209,30 @@ export const createSessionsController = (deps: SessionsControllerDeps): Sessions
     await presenterView(req, res)
   }
 
-  return { create, getByCode, join, participantMe, getPresenter, getState, presenterAccess, end }
+  const updateSettings: RequestHandler = async (req, res) => {
+    const id = param(req, 'id')
+    await getPresenterSession(deps, id, readCookie(req, presenterCookieName(id)))
+    const { qnaOpen } = req.body as UpdateQnaSettingsBody
+    const result = await setQnaOpen(deps, id, qnaOpen)
+    if (result.changed) {
+      try {
+        deps.realtime.questions.emitQnaStatus(id, result.session.qnaOpen)
+      } catch (err) {
+        deps.logger.warn({ sessionId: id, realtimeError: describeError(err) }, 'qna status emit failed')
+      }
+    }
+    res.json({ success: true, data: { qnaOpen: result.session.qnaOpen } })
+  }
+
+  return {
+    create,
+    getByCode,
+    join,
+    participantMe,
+    getPresenter,
+    getState,
+    presenterAccess,
+    end,
+    updateSettings,
+  }
 }

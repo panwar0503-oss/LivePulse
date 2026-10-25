@@ -98,3 +98,62 @@ describe('environment configuration', () => {
     expect(message).not.toContain('abc')
   })
 })
+
+describe('AI configuration', () => {
+  it('uses the documented AI defaults', () => {
+    const env = loadEnv(validEnv)
+    expect(env).toMatchObject({
+      AI_ENABLED: true,
+      AI_PROVIDER: 'fake',
+      AI_MODEL: 'claude-opus-5-5',
+      EMBEDDINGS_PROVIDER: 'fake',
+      EMBEDDINGS_MODEL: 'Xenova/all-MiniLM-L6-v2',
+      EMBEDDINGS_DIM: 384,
+      AI_MAX_CONCURRENCY: 2,
+      AI_MAX_ATTEMPTS: 3,
+      AI_SESSION_TOKEN_BUDGET: 200000,
+    })
+    expect(loadEnv({ ...validEnv, AI_ENABLED: 'false' }).AI_ENABLED).toBe(false)
+  })
+
+  it('requires the Anthropic key only when the Anthropic provider is chosen', () => {
+    expect(() => loadEnv({ ...validEnv, AI_PROVIDER: 'anthropic' })).toThrow(/ANTHROPIC_API_KEY/)
+    expect(loadEnv({ ...validEnv, AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k-123' }).AI_PROVIDER).toBe(
+      'anthropic',
+    )
+    expect(loadEnv({ ...validEnv, AI_PROVIDER: 'fake' }).ANTHROPIC_API_KEY).toBeUndefined()
+  })
+
+  it('refuses an operator key shorter than 32 characters', () => {
+    expect(() => loadEnv({ ...validEnv, OPERATOR_KEY: 'too-short' })).toThrow(/OPERATOR_KEY/)
+    expect(loadEnv({ ...validEnv, OPERATOR_KEY: 'k'.repeat(32) }).OPERATOR_KEY).toHaveLength(32)
+  })
+
+  it('starts without an operator key', () => {
+    expect(loadEnv(validEnv).OPERATOR_KEY).toBeUndefined()
+  })
+
+  it('refuses an embeddings dimension that differs from the shared constant', () => {
+    expect(() => loadEnv({ ...validEnv, EMBEDDINGS_DIM: '768' })).toThrow(/EMBEDDINGS_DIM/)
+  })
+
+  it('refuses AI limits outside their ranges', () => {
+    expect(() => loadEnv({ ...validEnv, AI_MAX_CONCURRENCY: '17' })).toThrow(/AI_MAX_CONCURRENCY/)
+    expect(() => loadEnv({ ...validEnv, AI_MAX_ATTEMPTS: '0' })).toThrow(/AI_MAX_ATTEMPTS/)
+    expect(() => loadEnv({ ...validEnv, AI_SESSION_TOKEN_BUDGET: '0' })).toThrow(/AI_SESSION_TOKEN_BUDGET/)
+  })
+
+  it('error messages name AI keys but never their values', () => {
+    let message = ''
+    try {
+      loadEnv({ ...validEnv, OPERATOR_KEY: 'short-secret', AI_PROVIDER: 'anthropic', EMBEDDINGS_DIM: '777' })
+    } catch (error) {
+      message = error instanceof Error ? error.message : ''
+    }
+    expect(message).toContain('OPERATOR_KEY')
+    expect(message).toContain('ANTHROPIC_API_KEY')
+    expect(message).toContain('EMBEDDINGS_DIM')
+    expect(message).not.toContain('short-secret')
+    expect(message).not.toContain('777')
+  })
+})

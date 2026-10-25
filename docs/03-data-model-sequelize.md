@@ -11,6 +11,8 @@ Conventions: tables and columns `snake_case` (Sequelize `underscored: true`), mo
 - `title` `varchar(80)` · `description` `varchar(500)` nullable
 - `presenter_key_hash` `char(64)` unique (SHA-256 hex; the raw key is never stored)
 - `status` `ACTIVE | ENDED` · `ended_at` nullable, CHECK: set exactly when `status` is `ENDED`
+- `qna_open` boolean NOT NULL, default `true` (Phase 7). CHECK `sessions_qna_closed_when_ended`: `status = 'ACTIVE' OR qna_open = false`.
+  The migration backfills `false` for ENDED sessions; ending a session also sets it to `false`.
 - `ai_enabled` and `ai_tokens_used` are added in Phase 9, not in the Phase 3 migration
 
 ### participants (Phase 3)
@@ -68,16 +70,26 @@ Conventions: tables and columns `snake_case` (Sequelize `underscored: true`), mo
 
 ### questions (Phase 7)
 
-- `id` · `session_id` · `participant_id` · `text`
-- `status` `VISIBLE | PENDING_REVIEW | HIDDEN | ANSWERED | REJECTED` · `pinned` boolean
-- `upvote_count` integer (denormalised, updated in the same transaction as the upvote insert)
-- `answer_text` nullable · `answered_at` nullable
-- Phase 12 adds: `moderation_label` nullable · `duplicate_of_id` nullable self-FK · `embedding vector(384)` nullable
-- Index `(session_id, status, upvote_count DESC, created_at)`
+- `id` UUID PK · `session_id` FK → sessions (`ON DELETE CASCADE`) · `participant_id` FK → participants (`ON DELETE CASCADE`)
+- `text` `varchar(200)` · `text_key` `varchar(400)`: the duplicate key (whitespace collapsed, NFC, lower case; accents kept)
+- `hidden` boolean, default `false` · `pinned` boolean, default `false`
+- `answer_text` `varchar(500)` nullable · `answered_at` nullable · `created_at` · `updated_at`
+- Answered = `answered_at` not null. `answer_text` is separate, so a new answer replaces the old one.
+- CHECK `questions_text_not_blank`: `length(btrim(text)) > 0` · CHECK `questions_answer_not_blank`: `answer_text IS NULL OR length(btrim(answer_text)) > 0`
+- CHECK `questions_not_pinned_and_hidden`: `NOT (pinned AND hidden)`
+- **Partial unique index `questions_one_pinned_per_session` on `(session_id) WHERE pinned`**: at most one pinned question per session.
+  A pin replaces the current one under the session lock.
+- **Unique `questions_participant_text_key` on `(participant_id, text_key)`**: one participant cannot ask the same question twice
+- Index `questions_session_created_idx` on `(session_id, created_at)`
+- No status column and no stored upvote count (see `question_upvotes`).
+- Phase 12 adds: `moderation_label` nullable · `duplicate_of_id` nullable self-FK · `embedding vector(384)` nullable (not built)
 
 ### question_upvotes (Phase 7)
 
-- `question_id` · `participant_id` · unique `(question_id, participant_id)`
+- `id` UUID PK · `question_id` FK → questions and `participant_id` FK → participants (both `ON DELETE CASCADE`) · `created_at` (no `updated_at`: upvotes are final)
+- **Unique `question_upvotes_question_participant_key` on `(question_id, participant_id)`**: one upvote per participant per question
+- **The upvote count is counted, not stored.** Each question's count is `COUNT(*)` over this table; the session's upvote
+  `version` is the total number of upvote rows in the session. A stored counter would make upvoters contend on the question row.
 
 ### reaction_counts (Phase 8)
 

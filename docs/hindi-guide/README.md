@@ -17,6 +17,8 @@ features के लिए मुख्य संदर्भ है।
 | 6a | [04-stages/stage-03-realtime-backbone.md](04-stages/stage-03-realtime-backbone.md) | Stage 3: live connection, presence, session end |
 | 6b | [04-stages/stage-04-live-polls.md](04-stages/stage-04-live-polls.md) | Stage 4: live polls, एक vote, results switch |
 | 6c | [04-stages/stage-05-word-cloud.md](04-stages/stage-05-word-cloud.md) | Stage 5: word cloud, एक शब्द, normalisation, show/hide |
+| 6d | [04-stages/stage-06-live-qna.md](04-stages/stage-06-live-qna.md) | Stage 6: live Q&A, upvotes, pin/hide/answer, pause |
+| 6e | [04-stages/stage-07-ai-foundation.md](04-stages/stage-07-ai-foundation.md) | Stage 7: AI foundation, job queue, budget, presenter-only AI events |
 | 7 | [05-code/](05-code/) | हर फ़ाइल का code, line by line, हिंदी में |
 | 8 | [06-how-to-add-next-stage.md](06-how-to-add-next-stage.md) | अगला feature कैसे जोड़ें (step by step) |
 | 9 | [07-decisions.md](07-decisions.md) | हर बड़ा फ़ैसला: क्या, क्यों, trade-off |
@@ -62,7 +64,10 @@ features के लिए मुख्य संदर्भ है।
   विवरण: [04-stages/stage-04-live-polls.md](04-stages/stage-04-live-polls.md)।
 - Stage 5 (word-cloud): पूरा, verified (integration 238/238, live e2e 22/22); commit अभी बाकी है।
   विवरण: [04-stages/stage-05-word-cloud.md](04-stages/stage-05-word-cloud.md)।
-- अगला कदम: Stage 3–5 का commit, browser में polls और word cloud की जाँच; अगला stage (roadmap में Q&A, फिर
-  reactions) आपकी approval के बाद ही।
+- Stage 6 (live-qna): पूरा, verified (integration 311 pass + 1 skipped, live e2e 28/28); commit अभी बाकी है।
+  Skipped test word-cloud का race test है (intermittent failure; developer के निर्देश पर skip; वजह पक्की होने पर
+  फिर चालू करना है)। विवरण: [04-stages/stage-06-live-qna.md](04-stages/stage-06-live-qna.md)।
+- अगला कदम: Stage 3–6 का commit, skipped race test को ठीक करके फिर चालू करना, browser में polls, word cloud और Q&A
+  की जाँच; अगला stage (roadmap में reactions, फिर AI) आपकी approval के बाद ही।
 
 सारे commands और नतीजे `08-verification-log.md` में हैं। Demo से पहले `09-demo-script.md` पढ़ें।

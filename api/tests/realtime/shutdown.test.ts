@@ -120,6 +120,7 @@ describe('graceful shutdown', () => {
       clearPresenceTimers: () => undefined,
       polls: { clearPollTimers: () => undefined },
       wordCloud: { clearWordCloudTimers: () => undefined },
+      questions: { clearQuestionTimers: () => undefined },
       close: () => new Promise<void>(() => undefined),
     }
     const shutdown = createShutdown({

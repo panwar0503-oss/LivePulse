@@ -5,6 +5,7 @@ import {
   joinBodySchema,
   presenterAccessBodySchema,
   roomCodeSchema,
+  updateQnaSettingsBodySchema,
 } from '@livepulse/shared'
 import { createSessionsController, type SessionsControllerDeps } from '../controllers/sessions.controller.js'
 import { createOriginCheck } from '../middleware/origin-check.js'
@@ -60,6 +61,12 @@ export const createSessionsRouter = (deps: SessionsRouterDeps): Router => {
     controller.presenterAccess,
   )
   router.post('/sessions/:id/end', validateParams(idParams), controller.end)
+  router.patch(
+    '/sessions/:id/settings',
+    validateParams(idParams),
+    validateBody(updateQnaSettingsBodySchema),
+    controller.updateSettings,
+  )
 
   return router
 }

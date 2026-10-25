@@ -10,7 +10,7 @@ import type {
 import { AppError } from '../errors/app-error.js'
 import type { Models, Poll, PollOption } from '../models/index.js'
 
-export type PollsDeps = { sequelize: Sequelize; models: Models; now?: () => Date }
+export type PollsDeps = { sequelize: Sequelize; models: Models }
 
 export const MAX_POLLS_PER_SESSION = 50
 
@@ -220,9 +220,14 @@ export async function closePoll(
     if (!locked) throw pollNotFound()
     if (locked.status === 'DRAFT') throw new AppError(409, 'POLL_NOT_ACTIVE', 'This poll is not open.')
     if (locked.status === 'CLOSED') return { poll: locked, closed: false }
-    // Time taken after the lock, so it is never earlier than a vote that committed before the close.
-    const closedAt = deps.now?.() ?? new Date()
-    await locked.update({ status: 'CLOSED', closedAt }, { transaction })
+    // Database clock, taken after the lock: never earlier than a vote (also stamped by the database) that
+    // committed before the close.
+    await deps.sequelize.query(
+      "UPDATE polls SET status = 'CLOSED', closed_at = clock_timestamp(), updated_at = clock_timestamp() " +
+        'WHERE id = :pollId',
+      { replacements: { pollId }, type: QueryTypes.UPDATE, transaction },
+    )
+    await locked.reload({ transaction })
     return { poll: locked, closed: true }
   })
   return { poll: await buildPresenterPoll(deps, poll), closed }

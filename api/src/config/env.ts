@@ -1,3 +1,4 @@
+import { EMBEDDING_DIM } from '@livepulse/shared'
 import { z } from 'zod'
 
 const isHttpOrigin = (value: string): boolean => {
@@ -9,7 +10,7 @@ const isHttpOrigin = (value: string): boolean => {
   }
 }
 
-const envSchema = z.object({
+const baseSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   WEB_ORIGIN: z
@@ -39,6 +40,39 @@ const envSchema = z.object({
   // Open live connections allowed per client address, and per session on one instance.
   SOCKET_MAX_PER_IP: z.coerce.number().int().min(1).max(1000).default(20),
   SOCKET_MAX_PER_SESSION: z.coerce.number().int().min(1).max(10_000).default(500),
+  AI_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  AI_PROVIDER: z.enum(['fake', 'anthropic']).default('fake'),
+  // Required only for the anthropic provider (checked below); never logged.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  AI_MODEL: z.string().min(1).max(100).default('claude-opus-5-5'),
+  EMBEDDINGS_PROVIDER: z.enum(['local', 'fake']).default('fake'),
+  EMBEDDINGS_MODEL: z.string().min(1).max(200).default('Xenova/all-MiniLM-L6-v2'),
+  EMBEDDINGS_DIM: z.coerce.number().int().default(EMBEDDING_DIM),
+  AI_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
+  AI_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  AI_SESSION_TOKEN_BUDGET: z.coerce.number().int().min(1).max(10_000_000).default(200_000),
+  // Optional: without it the operator route answers 503.
+  OPERATOR_KEY: z.string().min(32).optional(),
+})
+
+const envSchema = baseSchema.superRefine((env, ctx) => {
+  if (env.AI_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['ANTHROPIC_API_KEY'],
+      message: 'required for the anthropic provider',
+    })
+  }
+  if (env.EMBEDDINGS_DIM !== EMBEDDING_DIM) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['EMBEDDINGS_DIM'],
+      message: 'must match the shared embedding size',
+    })
+  }
 })
 
 export type Env = z.infer<typeof envSchema>

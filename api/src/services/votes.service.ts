@@ -31,7 +31,7 @@ export async function castVote(
         transaction,
       })
       if (!option) throw new AppError(400, 'INVALID_OPTION', 'Choose one of the options shown.')
-      await Vote.create({ pollId, optionId, participantId, createdAt: new Date() }, { transaction })
+      await Vote.create({ pollId, optionId, participantId }, { transaction })
     })
   } catch (error) {
     // Caught outside the callback: the constraint violation has already aborted the transaction.

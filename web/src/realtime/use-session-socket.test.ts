@@ -223,3 +223,49 @@ describe('live poll state', () => {
     expect(effects.refetch).toBe(true)
   })
 })
+
+describe('live Q&A state', () => {
+  const QUESTION_ID = '44444444-4444-4444-8444-444444444444'
+  const upvotesAt = (version: number): SessionSocketEvent => ({
+    type: 'question_upvotes',
+    payload: { version, questions: [{ id: QUESTION_ID, upvotes: version }] },
+  })
+
+  it('keeps the newest upvote list and drops an older version', () => {
+    expect(run([upvotesAt(5), upvotesAt(3), upvotesAt(5)], connected).qnaUpvotes?.version).toBe(5)
+    expect(run([upvotesAt(5), upvotesAt(6)], connected).qnaUpvotes?.version).toBe(6)
+  })
+
+  it('asks for a refetch when a question changes', () => {
+    const created = sessionSocketReducer(connected, {
+      type: 'question_created',
+      payload: {
+        question: {
+          id: QUESTION_ID,
+          text: 'Why?',
+          upvotes: 0,
+          pinned: false,
+          answered: false,
+          answerText: null,
+          answeredAt: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      },
+    })
+    const updated = sessionSocketReducer(connected, {
+      type: 'question_updated',
+      payload: { questionId: QUESTION_ID },
+    })
+    expect(created.effects.refetch).toBe(true)
+    expect(updated.effects.refetch).toBe(true)
+  })
+
+  it('records the Q&A open state from a status event', () => {
+    const { state, effects } = sessionSocketReducer(connected, {
+      type: 'qna_status',
+      payload: { open: false },
+    })
+    expect(state.qnaOpen).toBe(false)
+    expect(effects.refetch).toBe(true)
+  })
+})

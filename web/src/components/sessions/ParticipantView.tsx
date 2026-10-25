@@ -1,5 +1,6 @@
 import type { ParticipantMe } from '@livepulse/shared'
 import type { SocketStatus } from '../../realtime/session-socket-state'
+import { StatusPill, type StatusTone } from '../ui/StatusPill'
 import { StatusMessage } from './StatusMessage'
 
 export type ParticipantViewProps = {
@@ -9,34 +10,40 @@ export type ParticipantViewProps = {
   endedLive?: boolean
 }
 
+const pillFor = (ended: boolean, connection?: SocketStatus): { tone: StatusTone; text: string } => {
+  if (ended) return { tone: 'ended', text: 'Ended' }
+  if (connection === 'refused') return { tone: 'refused', text: 'Refused' }
+  if (connection === 'reconnecting' || connection === 'disconnected') {
+    return { tone: 'reconnecting', text: 'Reconnecting…' }
+  }
+  return { tone: 'live', text: 'Live' }
+}
+
 export function ParticipantView({ me, connection, endedLive = false }: ParticipantViewProps) {
   const ended = me.session.status === 'ENDED' || endedLive
+  const pill = pillFor(ended, connection)
   return (
     <section className="flex flex-col gap-4 text-left">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-bold">{me.session.title}</h1>
-        <span className="rounded border border-slate-700 px-2 py-0.5 text-sm font-semibold">
-          {ended ? 'This session has ended' : 'Live'}
-        </span>
+      <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight sm:text-3xl">
+            {me.session.title}
+          </h1>
+          <StatusPill tone={pill.tone} announce>
+            {pill.text}
+          </StatusPill>
+        </div>
+        <p className="text-muted">
+          Joined as <span className="font-semibold text-ink">{me.participant.displayName}</span>
+        </p>
+        {ended ? null : <p className="text-sm text-muted">You are in this session.</p>}
       </div>
-      <p>
-        Joined as <span className="font-semibold">{me.participant.displayName}</span>
-      </p>
       {connection === 'refused' ? (
         <StatusMessage kind="error">
           We could not reconnect to this session. Refresh the page or join again.
         </StatusMessage>
-      ) : (connection === 'reconnecting' || connection === 'disconnected') && !ended ? (
-        <p role="status">Reconnecting…</p>
       ) : null}
-      {ended ? (
-        <StatusMessage kind="info">This session has ended.</StatusMessage>
-      ) : (
-        <>
-          <p>You are in this session.</p>
-          <p>Live polls and questions will appear here in a later release.</p>
-        </>
-      )}
+      {ended ? <StatusMessage kind="info">This session has ended.</StatusMessage> : null}
     </section>
   )
 }

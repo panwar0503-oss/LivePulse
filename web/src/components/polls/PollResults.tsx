@@ -30,20 +30,20 @@ export function PollResults({ options, results, myOptionId = null }: PollResults
                   <span className="text-sm font-normal"> (Your answer)</span>
                 ) : null}
               </span>
-              <span className="shrink-0 text-sm text-slate-700">
+              <span className="shrink-0 text-sm text-muted">
                 {count} · {pct}%
               </span>
             </div>
-            <div aria-hidden="true" className="h-2 w-full overflow-hidden rounded bg-slate-200">
+            <div aria-hidden="true" className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
               <div
-                className="h-2 rounded bg-blue-700 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                className="h-2 rounded-full bg-brand-600 transition-[width] duration-500 ease-out motion-reduce:transition-none"
                 style={{ width: `${pct}%` }}
               />
             </div>
           </li>
         ))}
       </ul>
-      <p className="text-sm text-slate-700">Percentages are of {votesText(results.total)}.</p>
+      <p className="text-sm text-muted">Percentages are of {votesText(results.total)}.</p>
     </div>
   )
 }

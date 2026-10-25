@@ -35,7 +35,7 @@ AI_PROVIDER=fake                 # fake | anthropic
 ANTHROPIC_API_KEY=               # only when AI_PROVIDER=anthropic; never commit
 AI_MODEL=claude-opus-5-5
 AI_FAST_MODEL=                   # optional; decided in Phase 9
-EMBEDDINGS_PROVIDER=local        # local | fake
+EMBEDDINGS_PROVIDER=fake         # local | fake (fake is the default; set local to use the model)
 EMBEDDINGS_MODEL=Xenova/all-MiniLM-L6-v2
 AI_SESSION_TOKEN_BUDGET=200000
 AI_MAX_CONCURRENCY=2
@@ -43,6 +43,7 @@ AI_MAX_ATTEMPTS=3
 AI_INSIGHTS_INTERVAL_SECONDS=15
 RAG_MIN_SIMILARITY=0.35
 KNOWLEDGE_MAX_UPLOAD_MB=10
+OPERATOR_KEY=                    # optional; at least 32 characters; enables PATCH /api/ops/ai
 
 # MCP (Phase 15) — set in the Claude Desktop MCP config, not here
 # LIVEPULSE_API_URL=http://localhost:4000
@@ -51,6 +52,9 @@ KNOWLEDGE_MAX_UPLOAD_MB=10
 
 Env is validated with Zod at startup; missing/invalid values fail fast with a clear message (no secret values
 printed). `ANTHROPIC_API_KEY` is required only when `AI_PROVIDER=anthropic`.
+
+Local embeddings cache: the first use of `EMBEDDINGS_PROVIDER=local` downloads `Xenova/all-MiniLM-L6-v2` (about 23 MB)
+into `api/.cache/models`. That folder is git-ignored. Later runs work offline.
 
 ## Scripts
 

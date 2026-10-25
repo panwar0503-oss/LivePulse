@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import type { PresenterSession } from '@livepulse/shared'
 import type { SocketStatus } from '../../realtime/session-socket-state'
+import { Card } from '../ui/Card'
+import { StatusPill } from '../ui/StatusPill'
+import { button } from '../ui/styles'
 import { StatusMessage } from './StatusMessage'
 
 export type PresenterDashboardProps = {
@@ -27,9 +30,8 @@ const CONNECTION_TEXT: Record<SocketStatus, string> = {
   refused: 'Connection refused',
 }
 
-const buttonClass =
-  'rounded px-4 py-2 font-medium focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700'
-
+// Side column of the presenter page: session controls, audience numbers and sharing details.
+// The session title lives in the page header.
 export function PresenterDashboard({
   session,
   pending,
@@ -54,96 +56,88 @@ export function PresenterDashboard({
   }
 
   return (
-    <section className="flex flex-col gap-4 text-left">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-bold">{session.title}</h1>
-        <span className="rounded border border-slate-700 px-2 py-0.5 text-sm font-semibold">
-          {ended ? 'Ended' : 'Live'}
-        </span>
-      </div>
-      {connection ? <p>{CONNECTION_TEXT[connection]}</p> : null}
-      {degraded ? (
-        <StatusMessage kind="info">Live updates may be delayed. Refresh if numbers look wrong.</StatusMessage>
-      ) : null}
-      {session.description ? <p className="whitespace-pre-wrap">{session.description}</p> : null}
-      {ended ? <StatusMessage kind="info">This session has ended.</StatusMessage> : null}
-
-      <div>
-        <p className="text-sm font-medium">Room code</p>
-        <p className="select-all text-4xl font-bold tracking-widest">{session.roomCode}</p>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium">Join link</p>
-        <p className="select-all break-all">{session.joinUrl}</p>
-        <div>
-          <button
-            type="button"
-            onClick={() => void copy()}
-            className={`${buttonClass} border border-slate-700`}
-          >
-            Copy join link
-          </button>
-        </div>
-        {copyMessage ? (
-          <p role="status" aria-live="polite" className="text-sm">
-            {copyMessage}
-          </p>
+    <div className="flex flex-col gap-4 text-left">
+      <Card
+        title="Session"
+        actions={<StatusPill tone={ended ? 'ended' : 'live'}>{ended ? 'Ended' : 'Live'}</StatusPill>}
+      >
+        {session.description ? (
+          <p className="whitespace-pre-wrap break-words text-sm text-muted">{session.description}</p>
         ) : null}
-      </div>
+        {ended ? <StatusMessage kind="info">This session has ended.</StatusMessage> : null}
+        {error ? <StatusMessage kind="error">{error}</StatusMessage> : null}
 
-      <p>
-        <span className="font-semibold">{session.participantCount}</span> people have joined
-      </p>
-
-      {liveCount === undefined ? null : liveCount === null ? (
-        <p>
-          <span className="font-semibold">—</span> Count unavailable right now
-        </p>
-      ) : (
-        <p>
-          {/* Only the number is announced, so the surrounding words are not re-read on every change. */}
-          <span aria-live="polite" aria-atomic="true" className="font-semibold">
-            {liveCount}
-          </span>{' '}
-          people connected right now
-        </p>
-      )}
-
-      {error ? <StatusMessage kind="error">{error}</StatusMessage> : null}
-
-      {ended ? null : confirming ? (
-        <div role="group" aria-label="Confirm ending the session" className="flex flex-col gap-3">
-          <p>End this session? Nobody will be able to join afterwards.</p>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={onEnd}
-              className={`${buttonClass} bg-red-800 text-white disabled:bg-slate-400`}
-            >
-              {pending ? 'Ending…' : 'Confirm'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className={`${buttonClass} border border-slate-700`}
-            >
-              Cancel
+        {ended ? null : confirming ? (
+          <div role="group" aria-label="Confirm ending the session" className="flex flex-col gap-3">
+            <p className="text-sm">End this session? Nobody will be able to join afterwards.</p>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" disabled={pending} onClick={onEnd} className={button('danger')}>
+                {pending ? 'Ending…' : 'Confirm'}
+              </button>
+              <button type="button" onClick={() => setConfirming(false)} className={button('secondary')}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <button type="button" onClick={() => setConfirming(true)} className={button('dangerSecondary')}>
+              End session
             </button>
           </div>
+        )}
+      </Card>
+
+      <Card title="Audience">
+        {connection ? <p className="text-sm font-medium text-muted">{CONNECTION_TEXT[connection]}</p> : null}
+        {degraded ? (
+          <StatusMessage kind="info">
+            Live updates may be delayed. Refresh if numbers look wrong.
+          </StatusMessage>
+        ) : null}
+        <div className="flex flex-col gap-2">
+          {liveCount === undefined ? null : liveCount === null ? (
+            <p className="text-muted">
+              <span className="text-2xl font-semibold text-ink">—</span> Count unavailable right now
+            </p>
+          ) : (
+            <p className="text-muted">
+              {/* Only the number is announced, so the surrounding words are not re-read on every change. */}
+              <span aria-live="polite" aria-atomic="true" className="text-2xl font-semibold text-ink">
+                {liveCount}
+              </span>{' '}
+              people connected right now
+            </p>
+          )}
+          <p className="text-muted">
+            <span className="text-2xl font-semibold text-ink">{session.participantCount}</span> people have
+            joined
+          </p>
         </div>
-      ) : (
-        <div>
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            className={`${buttonClass} border border-red-800 text-red-900`}
-          >
-            End session
-          </button>
+      </Card>
+
+      <Card title="Share">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-muted">Room code</p>
+          <p className="select-all font-mono text-4xl font-semibold tracking-widest text-ink">
+            {session.roomCode}
+          </p>
         </div>
-      )}
-    </section>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-muted">Join link</p>
+          <p className="select-all break-all rounded-xl bg-slate-50 px-3 py-2 text-sm">{session.joinUrl}</p>
+          <div>
+            <button type="button" onClick={() => void copy()} className={button('secondary', 'sm')}>
+              Copy join link
+            </button>
+          </div>
+          {copyMessage ? (
+            <p role="status" aria-live="polite" className="text-sm text-muted">
+              {copyMessage}
+            </p>
+          ) : null}
+        </div>
+      </Card>
+    </div>
   )
 }

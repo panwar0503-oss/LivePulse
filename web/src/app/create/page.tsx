@@ -4,6 +4,8 @@ import { useState } from 'react'
 import type { CreatedSession, CreateSessionBody } from '@livepulse/shared'
 import { CreateForm } from '../../components/sessions/CreateForm'
 import { SessionCreatedPanel } from '../../components/sessions/SessionCreatedPanel'
+import { AppShell } from '../../components/ui/AppShell'
+import { pageTitleClass, panelClass } from '../../components/ui/styles'
 import { createSession } from '../../lib/api/sessions'
 
 export default function CreatePage() {
@@ -32,18 +34,20 @@ export default function CreatePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
-      <h1 className="text-3xl font-bold">Create a session</h1>
-      {created ? (
-        <SessionCreatedPanel session={created} />
-      ) : (
-        <CreateForm
-          pending={pending}
-          error={error}
-          fieldErrors={fieldErrors}
-          onSubmit={(values) => void handleSubmit(values)}
-        />
-      )}
-    </main>
+    <AppShell>
+      <div className={panelClass}>
+        <h1 className={pageTitleClass}>Create a session</h1>
+        {created ? (
+          <SessionCreatedPanel session={created} />
+        ) : (
+          <CreateForm
+            pending={pending}
+            error={error}
+            fieldErrors={fieldErrors}
+            onSubmit={(values) => void handleSubmit(values)}
+          />
+        )}
+      </div>
+    </AppShell>
   )
 }

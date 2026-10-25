@@ -114,8 +114,63 @@ Submissions are HTTP (`POST /api/word-prompts/:id/responses`), not socket comman
   `wordcloud:started`; close and ending a session with an open prompt → `wordcloud:results` then `wordcloud:closed`;
   switch → `wordcloud:updated` then `wordcloud:results`. Submissions are combined per prompt.
 
-### Question (with AI)
-1. `question:submit` → validate, rate limit, insert question (`VISIBLE`, or `PENDING_REVIEW` when AI moderation is
+### Q&A writes (Phase 7, built)
+Submit, upvote and moderation are HTTP, not socket commands. Each write commits first, then emits.
+1. Submit (`POST /api/sessions/by-code/:code/questions`): the participant cookie is checked before the body is validated.
+   The text is validated with Zod; the duplicate key (`text_key`) is computed in the service, never taken from the request.
+2. Submit transaction: session `FOR SHARE` (409 `SESSION_ENDED`, then 409 `QNA_CLOSED` if `qna_open` is false) →
+   participant `FOR NO KEY UPDATE` → count this participant's questions → insert. The five-question cap (409
+   `QUESTION_LIMIT_REACHED`) relies on the participant row lock: a second submit from the same participant waits, so its
+   COUNT sees the first one. `NO KEY UPDATE` does not block the key-share locks taken by foreign-key checks. The unique
+   `(participant_id, text_key)` maps to 409 `QUESTION_ALREADY_ASKED`, mapped outside the transaction callback.
+3. Upvote (`POST /api/questions/:id/upvotes`): session `FOR SHARE` → membership check → question `FOR SHARE` (hidden or
+   unknown → 404; own question → 403) → insert into `question_upvotes`. Upvotes do not block each other. The unique
+   `(question_id, participant_id)` maps to 409 `UPVOTE_ALREADY_RECORDED`, mapped outside the transaction callback.
+4. Q&A switch (`PATCH /api/sessions/:id/settings`) and end: session `FOR UPDATE`. It waits for submits and upvotes in
+   flight, which hold the session `FOR SHARE`, so nothing commits after a close. End also sets `qna_open = false` in the same
+   transaction. Opening an ended session is refused (409 `SESSION_ENDED`).
+5. Moderation (`PATCH /api/questions/:id`): session `FOR UPDATE` → question `FOR UPDATE` → updates. A pin unpins the
+   session's current pinned question under the same session lock, then pins this one (the pin replaces the pin). The
+   partial unique index `questions_one_pinned_per_session` is the backstop (409 `QUESTION_PIN_CONFLICT`). Hiding a pinned
+   question unpins it. Moderation is allowed after the session has ended.
+6. Counts are counted, not stored: each question's upvotes are `COUNT(*)` over `question_upvotes`. The list and the upvote
+   `version` are read in one read-only REPEATABLE READ snapshot.
+7. Emits after commit only: submit → `question:created` (re-read; skipped if hidden by then); upvote → combined
+   `question:upvotes` (about 250 ms per session); moderation → `question:updated`, plus `question:upvotes` when visibility
+   changed; switch and end → `qna:status`. Combined upvote updates read the counts fresh at send time, so a send after a
+   hide or restore shows the current state.
+
+### AI jobs (ai-foundation, built)
+AI work never runs inside a request or a transaction. A request commits its data, then enqueues an `ai_jobs` row and nudges
+the runner. Requirement: `requirements/ai-foundation/`.
+
+- **Job queue in PostgreSQL:** `ai_jobs` is the queue and the history. Enqueue is `ON CONFLICT DO NOTHING` on the active
+  `(session_id, dedupe_key)`, so a repeated request does not create a second job. No Redis queue (Redis Pub/Sub is not durable).
+- **Runner (`api/src/ai/runner.ts`):** polls every second and is nudged on enqueue. Concurrency is bounded by
+  `AI_MAX_CONCURRENCY`. Stale `RUNNING` rows are recovered at start and every 60 s (`RUNNER_INTERRUPTED` after the last attempt).
+  Retries use capped back-off; a job ends `SUCCEEDED`, `FAILED` (safe code only) or `SKIPPED`.
+- **Claim:** lock the session `FOR UPDATE`, then `UPDATE ai_jobs ... WHERE status='PENDING'`. Zero rows means another runner won.
+  Lock order is always session, then job.
+- **Provider selection:** `AI_PROVIDER=fake` (default in `.env.example`, used by all tests) or `anthropic` (Claude through
+  `@langchain/anthropic`, `maxRetries: 0`). `anthropic` requires `ANTHROPIC_API_KEY` and fails at startup without it. Provider
+  errors are mapped to fixed codes; only rate limit, unavailable, timeout and invalid output are retried.
+- **Budget, reserve then settle:** at claim, the job reserves its estimate on the job row under the session lock, and budget
+  in use is `ai_tokens_used` plus all reservations. When the run completes, the reservation is replaced by the actual tokens.
+  Stale-run recovery refunds the reservation. Default budget is 200,000 tokens per session.
+- **Completion is conditional:** `WHERE id AND status='RUNNING' AND attempts=:claimed`, so a stale run cannot overwrite a newer one.
+  If AI was switched off meanwhile, the output is discarded and the job is `SKIPPED` (tokens spent are still charged).
+- **Presenter-only events:** `ai:status`, `ai:usage` and `ai:job-failed` go to `presenter:<sessionId>` only, after commit.
+  Payloads are built from explicit fields; no input, output or prompt text is ever sent.
+- **Operator switch:** `PATCH /api/ops/ai` (header `X-Operator-Key`, compared with `timingSafeEqual`) turns AI off for all
+  sessions at runtime. Turning it off cancels pending jobs and refuses new ones. Without `OPERATOR_KEY` the route answers 503.
+- **Global switch (in-process):** the runtime switch is a variable inside the API process, seeded from the env default
+  (`AI_ENABLED`). **Limit: it is per instance.** With two API instances, a toggle on one does not reach the other until
+  the switch is moved to shared state (for example a PostgreSQL row). Single-instance only for now.
+- **Vectors:** pgvector extension is enabled (migration M1). Vectors are read and written with parameterised `sequelize.query`
+  only; there is no pgvector npm package. Embeddings are 384-dimensional (`EMBEDDING_DIM`).
+
+### Question with AI (Phase 12, not built)
+1. Submit → validate, rate limit, insert question (`VISIBLE`, or `PENDING_REVIEW` when AI moderation is
    on and moderation runs before display — see Phase 12 decision) + `ai_jobs(type=QNA_COPILOT)` in one transaction.
 2. Commit → emit `question:created` (session room if visible; presenter room if pending).
 3. AI runner executes the Q&A graph → persists moderation label / duplicate link / answer draft → commit → emit

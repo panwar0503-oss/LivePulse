@@ -1,10 +1,17 @@
 import type {
+  AiJobFailed,
+  AiStatus,
+  AiUsage,
   PollClosed,
   PollResults,
   PollResultsEvent,
   PollStarted,
   PollUpdated,
   PresenceCount,
+  QnaStatus,
+  QuestionCreated,
+  QuestionUpdated,
+  QuestionUpvotes,
   RealtimeErrorCode,
   SessionEnded,
   WordCloud,
@@ -35,6 +42,14 @@ export type SessionSocketState = {
   wordClouds: Record<string, WordCloud>
   openWordPromptId: string | null
   wordClosedNotice: { promptId: string; closedAt: string } | null
+  // Latest upvote list; only ever replaced by a newer version.
+  qnaUpvotes: QuestionUpvotes | null
+  // Last Q&A open flag announced live; null until a status event arrives (the snapshot has the rest).
+  qnaOpen: boolean | null
+  // Latest AI events for the presenter; the HTTP state is the base and the hook overlays these.
+  aiStatus: AiStatus | null
+  aiUsage: AiUsage | null
+  aiFailure: AiJobFailed | null
 }
 
 export type SessionSocketEvent =
@@ -52,6 +67,13 @@ export type SessionSocketEvent =
   | { type: 'wordcloud_closed'; payload: WordcloudClosed }
   | { type: 'wordcloud_updated'; payload: WordcloudUpdated }
   | { type: 'wordcloud_results'; payload: WordcloudResults }
+  | { type: 'question_created'; payload: QuestionCreated }
+  | { type: 'question_upvotes'; payload: QuestionUpvotes }
+  | { type: 'question_updated'; payload: QuestionUpdated }
+  | { type: 'qna_status'; payload: QnaStatus }
+  | { type: 'ai_status'; payload: AiStatus }
+  | { type: 'ai_usage'; payload: AiUsage }
+  | { type: 'ai_job_failed'; payload: AiJobFailed }
 
 // Side effects the hook performs after applying the new state; the reducer itself stays pure.
 export type SessionSocketEffects = {
@@ -76,6 +98,11 @@ export const initialSessionSocketState: SessionSocketState = {
   wordClouds: {},
   openWordPromptId: null,
   wordClosedNotice: null,
+  qnaUpvotes: null,
+  qnaOpen: null,
+  aiStatus: null,
+  aiUsage: null,
+  aiFailure: null,
 }
 
 const NO_EFFECTS: SessionSocketEffects = { refetch: false, reconnect: false, stop: false }
@@ -185,5 +212,27 @@ export const sessionSocketReducer = (
       if (stored && cloud.version <= stored.version) return same(state)
       return same({ ...state, wordClouds: { ...state.wordClouds, [promptId]: cloud } })
     }
+
+    // The refetch returns the full ordered list, so a created or changed question needs no local merge.
+    case 'question_created':
+    case 'question_updated':
+      return { state, effects: { ...NO_EFFECTS, refetch: true } }
+
+    case 'question_upvotes':
+      // Drop older or equal versions that arrive out of order.
+      if (state.qnaUpvotes && event.payload.version <= state.qnaUpvotes.version) return same(state)
+      return same({ ...state, qnaUpvotes: event.payload })
+
+    case 'qna_status':
+      return { state: { ...state, qnaOpen: event.payload.open }, effects: { ...NO_EFFECTS, refetch: true } }
+
+    case 'ai_status':
+      return same({ ...state, aiStatus: event.payload })
+
+    case 'ai_usage':
+      return same({ ...state, aiUsage: event.payload })
+
+    case 'ai_job_failed':
+      return same({ ...state, aiFailure: event.payload })
   }
 }

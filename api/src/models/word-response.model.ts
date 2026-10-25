@@ -1,4 +1,4 @@
-import { DataTypes, Model } from 'sequelize'
+import { DataTypes, Model, literal } from 'sequelize'
 import type { CreationOptional, InferAttributes, InferCreationAttributes, Sequelize } from 'sequelize'
 
 export class WordResponse extends Model<
@@ -21,7 +21,8 @@ export const initWordResponse = (sequelize: Sequelize): void => {
       participantId: { type: DataTypes.UUID, allowNull: false },
       normalizedWord: { type: DataTypes.STRING(120), allowNull: false },
       displayWord: { type: DataTypes.STRING(30), allowNull: false },
-      createdAt: { type: DataTypes.DATE, allowNull: false },
+      // Database clock at insert, so it is comparable with closed_at, which is also set by the database.
+      createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: literal('clock_timestamp()') },
     },
     {
       sequelize,

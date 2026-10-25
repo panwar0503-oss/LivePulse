@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Sequelize } from 'sequelize'
+import { QueryTypes, Sequelize } from 'sequelize'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { AppError } from '../../src/errors/app-error.js'
 import { initModels } from '../../src/models/index.js'
@@ -102,6 +102,30 @@ describe('ending a session closes its open word prompt', () => {
     expect(closedPrompt?.id).toBe(promptId)
     expect((await getWordCloud(deps, promptId)).total).toBe(1)
     expect((await models.WordPrompt.findByPk(promptId))?.status).toBe('CLOSED')
+  })
+
+  it('the close time of a prompt closed by ending the session is not earlier than an answer that was still being written', async () => {
+    const { sessionId, participantId, promptId } = await setup()
+    const submitting = await sequelize.transaction()
+    await models.WordPrompt.findByPk(promptId, { lock: submitting.LOCK.SHARE, transaction: submitting })
+
+    const end = track(endSession(deps, sessionId))
+    await waitUntilBlocked(sequelize)
+    // The answer is written while the end is already waiting, so it happens before the prompt closes.
+    await models.WordResponse.create(
+      { promptId, participantId, normalizedWord: 'hope', displayWord: 'Hope' },
+      { transaction: submitting },
+    )
+    await submitting.commit()
+    const { closedPrompt } = await end.promise
+
+    const [row] = await sequelize.query<{ late: number }>(
+      `SELECT count(*)::int AS late FROM word_responses r JOIN word_prompts p ON p.id = r.prompt_id
+       WHERE p.id = :promptId AND r.created_at > p.closed_at`,
+      { replacements: { promptId }, type: QueryTypes.SELECT },
+    )
+    expect(closedPrompt?.id).toBe(promptId)
+    expect(row?.late).toBe(0)
   })
 
   it('a submission after the session ended is refused', async () => {

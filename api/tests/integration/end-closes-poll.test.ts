@@ -1,4 +1,4 @@
-import { Sequelize } from 'sequelize'
+import { QueryTypes, Sequelize } from 'sequelize'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { AppError } from '../../src/errors/app-error.js'
 import { initModels } from '../../src/models/index.js'
@@ -102,6 +102,27 @@ describe('ending a session closes its open poll', () => {
 
     expect(closedPoll?.id).toBe(pollId)
     expect((await getPollResults(deps, pollId)).total).toBe(1)
+  })
+
+  it('the close time of a poll closed by ending the session is not earlier than a vote that was still being written', async () => {
+    const { sessionId, participantId, pollId, optionId } = await setup()
+    const voting = await sequelize.transaction()
+    await models.Poll.findByPk(pollId, { lock: voting.LOCK.SHARE, transaction: voting })
+
+    const end = track(endSession(deps, sessionId))
+    await waitUntilBlocked(sequelize)
+    // The vote is written while the end is already waiting, so it happens before the poll closes.
+    await models.Vote.create({ pollId, optionId, participantId }, { transaction: voting })
+    await voting.commit()
+    const { closedPoll } = await end.promise
+
+    const [row] = await sequelize.query<{ late: number }>(
+      `SELECT count(*)::int AS late FROM votes v JOIN polls p ON p.id = v.poll_id
+       WHERE p.id = :pollId AND v.created_at > p.closed_at`,
+      { replacements: { pollId }, type: QueryTypes.SELECT },
+    )
+    expect(closedPoll?.id).toBe(pollId)
+    expect(row?.late).toBe(0)
   })
 
   it('a vote after the session ended is refused', async () => {

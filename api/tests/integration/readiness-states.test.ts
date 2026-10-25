@@ -22,6 +22,15 @@ const env: Env = {
   PRESENCE_GRACE_MS: 5000,
   SOCKET_MAX_PER_IP: 20,
   SOCKET_MAX_PER_SESSION: 500,
+  AI_ENABLED: true,
+  AI_PROVIDER: 'fake',
+  AI_MODEL: 'claude-opus-5-5',
+  EMBEDDINGS_PROVIDER: 'fake',
+  EMBEDDINGS_MODEL: 'Xenova/all-MiniLM-L6-v2',
+  EMBEDDINGS_DIM: 384,
+  AI_MAX_CONCURRENCY: 2,
+  AI_MAX_ATTEMPTS: 3,
+  AI_SESSION_TOKEN_BUDGET: 200000,
 }
 
 // Never connects: readiness is driven by stubbed probes below.

@@ -13,7 +13,7 @@ export type CreateFormProps = {
 }
 
 const inputClass =
-  'w-full rounded border border-slate-500 p-2 focus:outline focus:outline-2 focus:outline-blue-700'
+  'w-full rounded-xl border border-slate-500 bg-white px-3 py-2 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
 
 export function CreateForm({ pending, error, fieldErrors, onSubmit }: CreateFormProps) {
   const [title, setTitle] = useState('')
@@ -60,7 +60,7 @@ export function CreateForm({ pending, error, fieldErrors, onSubmit }: CreateForm
           className={inputClass}
         />
         {errors.title ? (
-          <p id="title-error" className="text-sm text-red-800">
+          <p id="title-error" className="text-sm text-danger-800">
             {errors.title}
           </p>
         ) : null}
@@ -81,7 +81,7 @@ export function CreateForm({ pending, error, fieldErrors, onSubmit }: CreateForm
           className={inputClass}
         />
         {errors.description ? (
-          <p id="description-error" className="text-sm text-red-800">
+          <p id="description-error" className="text-sm text-danger-800">
             {errors.description}
           </p>
         ) : null}
@@ -89,7 +89,7 @@ export function CreateForm({ pending, error, fieldErrors, onSubmit }: CreateForm
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-blue-700 px-4 py-2 font-medium text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700 disabled:bg-slate-400"
+        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
       >
         {pending ? 'Creating…' : 'Create session'}
       </button>

@@ -1,5 +1,6 @@
 import type { ParticipantPoll as ParticipantPollData } from '@livepulse/shared'
 import { StatusMessage } from '../sessions/StatusMessage'
+import { EmptyState } from '../ui/EmptyState'
 import { PollResults } from './PollResults'
 
 export type ParticipantPollProps = {
@@ -13,7 +14,7 @@ export type ParticipantPollProps = {
 }
 
 const buttonClass =
-  'rounded px-4 py-2 font-medium focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700'
+  'inline-flex items-center justify-center gap-2 rounded-xl min-h-11 px-5 font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
 
 export function ParticipantPoll({
   poll,
@@ -27,8 +28,8 @@ export function ParticipantPoll({
   if (status === 'loading') {
     return (
       <div role="status" aria-label="Loading poll" className="flex flex-col gap-3">
-        <div className="h-6 w-2/3 animate-pulse rounded bg-slate-200 motion-reduce:animate-none" />
-        <div className="h-14 w-full animate-pulse rounded bg-slate-200 motion-reduce:animate-none" />
+        <div className="h-6 w-2/3 animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
+        <div className="h-14 w-full animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
       </div>
     )
   }
@@ -37,7 +38,11 @@ export function ParticipantPoll({
       <div className="flex flex-col gap-3">
         <StatusMessage kind="error">{loadError ?? 'We could not load the poll.'}</StatusMessage>
         <div>
-          <button type="button" onClick={onRetry} className={`${buttonClass} bg-blue-700 text-white`}>
+          <button
+            type="button"
+            onClick={onRetry}
+            className={`${buttonClass} bg-brand-600 text-white enabled:hover:bg-brand-700`}
+          >
             Try again
           </button>
         </div>
@@ -45,7 +50,7 @@ export function ParticipantPoll({
     )
   }
   if (!poll) {
-    return <p className="text-left">No poll is open right now.</p>
+    return <EmptyState>No poll is open right now.</EmptyState>
   }
 
   const closed = poll.status === 'CLOSED'
@@ -55,7 +60,7 @@ export function ParticipantPoll({
 
   return (
     <section aria-labelledby="poll-question" className="flex flex-col gap-4 text-left">
-      <h2 id="poll-question" className="text-2xl font-bold break-words">
+      <h2 id="poll-question" className="text-xl font-semibold tracking-tight break-words">
         {poll.question}
       </h2>
 
@@ -74,15 +79,15 @@ export function ParticipantPoll({
                   disabled={pending || voted || closed}
                   aria-pressed={selected}
                   onClick={() => onVote(option.id)}
-                  className={`flex min-h-14 w-full items-center justify-between gap-3 rounded border-2 px-4 py-3 text-left text-lg font-medium focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700 motion-reduce:transition-none ${
+                  className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 transition-colors duration-150 text-left text-lg font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none ${
                     selected
-                      ? 'border-blue-700 bg-blue-50 text-slate-900'
+                      ? 'border-brand-600 bg-brand-50 text-slate-900'
                       : 'border-slate-500 bg-white text-slate-900 enabled:hover:bg-slate-50 disabled:text-slate-600'
                   }`}
                 >
                   <span className="break-words">{option.label}</span>
                   {selected ? (
-                    <span className="flex shrink-0 items-center gap-1 text-base font-semibold text-blue-700">
+                    <span className="flex shrink-0 items-center gap-1 text-base font-semibold text-brand-700">
                       <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor">
                         <path d="M7.7 14.3 3.9 10.5l1.4-1.4 2.4 2.4 7-7 1.4 1.4z" />
                       </svg>

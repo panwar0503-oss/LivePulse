@@ -1,4 +1,4 @@
-import { DataTypes, Model } from 'sequelize'
+import { DataTypes, Model, literal } from 'sequelize'
 import type { CreationOptional, InferAttributes, InferCreationAttributes, Sequelize } from 'sequelize'
 
 export class Vote extends Model<InferAttributes<Vote>, InferCreationAttributes<Vote>> {
@@ -16,7 +16,8 @@ export const initVote = (sequelize: Sequelize): void => {
       pollId: { type: DataTypes.UUID, allowNull: false },
       optionId: { type: DataTypes.UUID, allowNull: false },
       participantId: { type: DataTypes.UUID, allowNull: false },
-      createdAt: { type: DataTypes.DATE, allowNull: false },
+      // Database clock at insert, so it is comparable with closed_at, which is also set by the database.
+      createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: literal('clock_timestamp()') },
     },
     {
       sequelize,

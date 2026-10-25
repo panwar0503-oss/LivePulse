@@ -2,11 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  aiJobFailedSchema,
+  aiStatusSchema,
+  aiUsageSchema,
   pollClosedSchema,
   pollResultsEventSchema,
   pollStartedSchema,
   pollUpdatedSchema,
   presenceCountSchema,
+  qnaStatusSchema,
+  questionCreatedSchema,
+  questionUpdatedSchema,
+  questionUpvotesSchema,
   sessionEndedSchema,
   sessionErrorSchema,
   wordcloudClosedSchema,
@@ -120,6 +127,34 @@ export const useSessionSocket = ({
     socket.on('wordcloud:results', (payload) => {
       const parsed = wordcloudResultsSchema.safeParse(payload)
       if (parsed.success) dispatch({ type: 'wordcloud_results', payload: parsed.data })
+    })
+    socket.on('question:created', (payload) => {
+      const parsed = questionCreatedSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'question_created', payload: parsed.data })
+    })
+    socket.on('question:upvotes', (payload) => {
+      const parsed = questionUpvotesSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'question_upvotes', payload: parsed.data })
+    })
+    socket.on('question:updated', (payload) => {
+      const parsed = questionUpdatedSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'question_updated', payload: parsed.data })
+    })
+    socket.on('qna:status', (payload) => {
+      const parsed = qnaStatusSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'qna_status', payload: parsed.data })
+    })
+    socket.on('ai:status', (payload) => {
+      const parsed = aiStatusSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'ai_status', payload: parsed.data })
+    })
+    socket.on('ai:usage', (payload) => {
+      const parsed = aiUsageSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'ai_usage', payload: parsed.data })
+    })
+    socket.on('ai:job-failed', (payload) => {
+      const parsed = aiJobFailedSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'ai_job_failed', payload: parsed.data })
     })
     socket.on('session:error', (payload) => {
       const parsed = sessionErrorSchema.safeParse(payload)

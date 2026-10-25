@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  aiJobFailedSchema,
+  aiStatusSchema,
+  aiUsageSchema,
   handshakeAuthSchema,
   pollResultsEventSchema,
   pollStartedSchema,
   pollUpdatedSchema,
   presenceCountSchema,
+  qnaStatusSchema,
+  questionCreatedSchema,
+  questionUpvotesSchema,
   sessionErrorSchema,
   wordcloudResultsSchema,
   wordcloudStartedSchema,
@@ -76,6 +82,42 @@ describe('word cloud events', () => {
   })
 })
 
+describe('Q&A events', () => {
+  it('a new question event carries no voter identity', () => {
+    const parsed = questionCreatedSchema.parse({
+      question: {
+        id: sessionId,
+        text: 'Q',
+        upvotes: 0,
+        pinned: false,
+        answered: false,
+        answerText: null,
+        answeredAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        mine: true,
+        participantId: sessionId,
+        hidden: false,
+      },
+    })
+    expect(Object.keys(parsed.question).sort()).toEqual(
+      ['answerText', 'answered', 'answeredAt', 'createdAt', 'id', 'pinned', 'text', 'upvotes'].sort(),
+    )
+  })
+
+  it('an upvote update carries counts and a version only', () => {
+    const parsed = questionUpvotesSchema.parse({
+      version: 2,
+      questions: [{ id: sessionId, upvotes: 4, voters: ['x'] }],
+    })
+    expect(parsed).toEqual({ version: 2, questions: [{ id: sessionId, upvotes: 4 }] })
+    expect(questionUpvotesSchema.safeParse({ questions: [] }).success).toBe(false)
+  })
+
+  it('a Q&A status event carries only the open flag', () => {
+    expect(qnaStatusSchema.parse({ open: false, extra: 1 })).toEqual({ open: false })
+  })
+})
+
 describe('handshake auth', () => {
   it('accepts a presenter handshake with a session id', () => {
     expect(handshakeAuthSchema.safeParse({ role: 'presenter', sessionId }).success).toBe(true)
@@ -116,5 +158,38 @@ describe('realtime payloads', () => {
       message: 'Live updates paused.',
     })
     expect(result.success).toBe(true)
+  })
+})
+
+describe('AI events', () => {
+  const jobId = '22222222-2222-4222-8222-222222222222'
+
+  it('AI events carry ids and numbers only', () => {
+    expect(aiStatusSchema.parse({ sessionId, enabled: true, globalEnabled: false, note: 'x' })).toEqual({
+      sessionId,
+      enabled: true,
+      globalEnabled: false,
+    })
+    expect(aiUsageSchema.parse({ sessionId, tokensUsed: 5, tokenBudget: 10, text: 'x' })).toEqual({
+      sessionId,
+      tokensUsed: 5,
+      tokenBudget: 10,
+    })
+    expect(aiUsageSchema.safeParse({ sessionId, tokensUsed: 5, tokenBudget: 0 }).success).toBe(false)
+  })
+
+  it('a job-failed event carries a fixed message, not provider text', () => {
+    const parsed = aiJobFailedSchema.parse({
+      sessionId,
+      jobId,
+      type: 'PING',
+      taskName: 'Diagnostic check',
+      errorCode: 'PROVIDER_TIMEOUT',
+      message: 'The AI service took too long to respond.',
+      failedAt: '2026-01-01T10:00:00.000Z',
+      providerError: 'raw upstream text',
+    })
+    expect(JSON.stringify(parsed)).not.toContain('raw upstream text')
+    expect(aiJobFailedSchema.safeParse({ ...parsed, errorCode: 'NOPE' }).success).toBe(false)
   })
 })

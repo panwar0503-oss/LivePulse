@@ -1,7 +1,7 @@
 import type { Express } from 'express'
 import { pino, type Logger } from 'pino'
 import { Sequelize } from 'sequelize'
-import { createApp, type AppRealtime } from '../../src/app.js'
+import { createApp, type AppAi, type AppRealtime } from '../../src/app.js'
 import { initModels } from '../../src/models/index.js'
 import type { ReadinessChecker } from '../../src/services/readiness.service.js'
 import { assertTestDatabaseUrl } from './test-db.js'
@@ -35,13 +35,24 @@ export const noopRealtime: AppRealtime = {
     scheduleCloud: () => undefined,
     emitCloudNow: async () => undefined,
   },
+  questions: {
+    emitQuestionCreated: async () => undefined,
+    emitQuestionUpdated: () => undefined,
+    emitQnaStatus: () => undefined,
+    scheduleUpvotes: () => undefined,
+    emitUpvotesNow: async () => undefined,
+  },
 }
+
+// Fake provider, no operator key: tests that need one pass their own config.
+export const testAi: AppAi = { env: { AI_PROVIDER: 'fake', AI_MAX_ATTEMPTS: 3, OPERATOR_KEY: undefined } }
 
 // A fresh app per call means fresh rate-limit counters.
 export const buildTestApp = (
   sequelize: Sequelize,
   logger: Logger = pino({ level: 'silent' }),
   realtime: AppRealtime = noopRealtime,
+  ai: AppAi = testAi,
 ): Express =>
   createApp({
     env: { NODE_ENV: 'test', WEB_ORIGIN: [WEB_ORIGIN], TRUST_PROXY: false },
@@ -50,4 +61,5 @@ export const buildTestApp = (
     sequelize,
     models: initModels(sequelize),
     realtime,
+    ai,
   })

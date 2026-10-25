@@ -1,17 +1,22 @@
 import { QueryTypes, UniqueConstraintError } from 'sequelize'
-import type { Sequelize } from 'sequelize'
+import type { Sequelize, Transaction } from 'sequelize'
 import type { PresenterSession, PresenterSessionState, PublicSession } from '@livepulse/shared'
 import { AppError } from '../errors/app-error.js'
 import { generateRoomCode as defaultGenerateRoomCode } from '../lib/room-code.js'
 import { generateToken, hashToken, safeEqualHash } from '../lib/tokens.js'
 import type { Participant, Session } from '../models/index.js'
+import { cancelPendingAiJobs } from './ai-jobs.service.js'
 
 export type SessionModels = { Session: typeof Session; Participant: typeof Participant }
 
 export type SessionsDeps = {
   models: SessionModels
   generateRoomCode?: () => string
+  // From AI_SESSION_TOKEN_BUDGET; the model's default applies when absent.
+  aiSessionTokenBudget?: number
 }
+
+const DEFAULT_AI_SESSION_TOKEN_BUDGET = 200_000
 
 const MAX_ROOM_CODE_ATTEMPTS = 5
 
@@ -43,6 +48,9 @@ export async function createSession(
         description: input.description ?? null,
         presenterKeyHash,
         endedAt: null,
+        // AI is off until the presenter turns it on.
+        aiEnabled: false,
+        aiTokenBudget: deps.aiSessionTokenBudget ?? DEFAULT_AI_SESSION_TOKEN_BUDGET,
       })
       return { session, presenterKey }
     } catch (error) {
@@ -87,12 +95,25 @@ export async function checkPresenterKey(
   return session
 }
 
+/** Takes the session's ACTIVE row in `table` FOR UPDATE; the table name is a fixed literal, never input. */
+const lockActive = async (
+  sequelize: Sequelize,
+  table: 'polls' | 'word_prompts',
+  sessionId: string,
+  transaction: Transaction,
+): Promise<void> => {
+  await sequelize.query(
+    `SELECT id FROM ${table} WHERE session_id = :sessionId AND status = 'ACTIVE' FOR UPDATE`,
+    { replacements: { sessionId }, type: QueryTypes.SELECT, transaction },
+  )
+}
+
 export type ClosedPoll = { id: string; closedAt: Date }
 export type ClosedPrompt = { id: string; closedAt: Date }
 
 /**
- * Lock order: session FOR UPDATE, then the open poll, then the open word prompt (each UPDATE waits for
- * votes or submissions holding that row FOR SHARE).
+ * Lock order: session FOR UPDATE, then the open poll FOR UPDATE, then the open word prompt FOR UPDATE (each
+ * lock waits for votes or submissions holding that row FOR SHARE).
  */
 export async function endSession(
   deps: SessionsDeps & { sequelize: Sequelize },
@@ -108,12 +129,22 @@ export async function endSession(
     if (!session) throw notFound()
     // Idempotent: an ended session is returned unchanged, keeping its first end time.
     if (session.status === 'ACTIVE') {
-      await session.update({ status: 'ENDED', endedAt: new Date() }, { transaction })
+      // Q&A closes with the session: the database requires qna_open=false once a session is ENDED.
+      // Stamped by the database clock (after the lock), the same clock that sets questions.created_at,
+      // so "stored after the end" compares like with like; Node's clock may lag the database's.
+      await deps.sequelize.query(
+        "UPDATE sessions SET status = 'ENDED', qna_open = false, ended_at = clock_timestamp(), " +
+          'updated_at = clock_timestamp() WHERE id = :sessionId',
+        { replacements: { sessionId }, transaction },
+      )
+      await session.reload({ transaction })
     }
     // Same transaction: the session and its open poll end together or not at all. The partial unique
     // index allows at most one ACTIVE poll, and an ended session has none left, so a repeat end closes nothing.
-    // clock_timestamp() is read when each poll row is updated, after the wait for votes in flight (FOR SHARE).
-    // A vote that commits during that wait is therefore never later than the poll's closed_at.
+    // A blocked UPDATE evaluates clock_timestamp() before it waits for the row, so each open row is first
+    // locked FOR UPDATE (waiting for votes or submissions in flight to commit), then stamped.
+    // An answer that commits during that wait is therefore never later than closed_at.
+    await lockActive(deps.sequelize, 'polls', sessionId, transaction)
     const rows = await deps.sequelize.query<{ id: string; closed_at: Date }>(
       "UPDATE polls SET status = 'CLOSED', closed_at = clock_timestamp(), updated_at = clock_timestamp() " +
         "WHERE session_id = :sessionId AND status = 'ACTIVE' RETURNING id, closed_at",
@@ -121,6 +152,7 @@ export async function endSession(
     )
     const closed = rows[0]
     // Same rules for the open word prompt (at most one ACTIVE per session, by its partial unique index).
+    await lockActive(deps.sequelize, 'word_prompts', sessionId, transaction)
     const promptRows = await deps.sequelize.query<{ id: string; closed_at: Date }>(
       "UPDATE word_prompts SET status = 'CLOSED', closed_at = clock_timestamp(), " +
         "updated_at = clock_timestamp() WHERE session_id = :sessionId AND status = 'ACTIVE' " +
@@ -128,11 +160,44 @@ export async function endSession(
       { replacements: { sessionId }, type: QueryTypes.SELECT, transaction },
     )
     const closedWord = promptRows[0]
+    // Waiting AI jobs end with the session (lock order: session, then jobs). Jobs already running are
+    // left to the runner.
+    await cancelPendingAiJobs(deps.sequelize, transaction, sessionId)
     return {
       session,
       closedPoll: closed ? { id: closed.id, closedAt: closed.closed_at } : null,
       closedPrompt: closedWord ? { id: closedWord.id, closedAt: closedWord.closed_at } : null,
     }
+  })
+}
+
+/**
+ * Q&A switch. FOR UPDATE waits for submits and upvotes in flight (they hold the session FOR SHARE),
+ * so nothing commits after a close. Closing an ended session is a no-op; opening one is refused.
+ */
+export async function setQnaOpen(
+  deps: SessionsDeps & { sequelize: Sequelize },
+  sessionId: string,
+  qnaOpen: boolean,
+): Promise<{ session: Session; changed: boolean }> {
+  return deps.sequelize.transaction(async (transaction) => {
+    const session = await deps.models.Session.findByPk(sessionId, {
+      lock: transaction.LOCK.UPDATE,
+      transaction,
+    })
+    if (!session) throw notFound()
+    if (session.status === 'ENDED') {
+      if (qnaOpen) throw new AppError(409, 'SESSION_ENDED', 'This session has ended.')
+      return { session, changed: false }
+    }
+    if (session.qnaOpen === qnaOpen) return { session, changed: false }
+    // Database clock after the lock, matching questions.created_at and question_upvotes.created_at.
+    await deps.sequelize.query(
+      'UPDATE sessions SET qna_open = :qnaOpen, updated_at = clock_timestamp() WHERE id = :sessionId',
+      { replacements: { sessionId, qnaOpen }, transaction },
+    )
+    await session.reload({ transaction })
+    return { session, changed: true }
   })
 }
 

@@ -17,9 +17,9 @@ const MAX_OPTIONS = 6
 const QUESTION_MAX = 200
 
 const inputClass =
-  'w-full rounded border border-slate-500 p-2 focus:outline focus:outline-2 focus:outline-blue-700'
+  'w-full rounded-xl border border-slate-500 bg-white px-3 py-2 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
 const secondaryButton =
-  'rounded border border-slate-700 px-4 py-2 font-medium focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700 disabled:opacity-50'
+  'inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 font-medium transition-colors duration-150 enabled:hover:bg-slate-50 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50'
 
 export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: CreatePollFormProps) {
   const [question, setQuestion] = useState('')
@@ -68,11 +68,11 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
           }
           className={inputClass}
         />
-        <p id="poll-question-count" className="text-sm text-slate-700">
+        <p id="poll-question-count" className="text-sm text-muted">
           {question.length}/{QUESTION_MAX} characters
         </p>
         {errors.question ? (
-          <p id="poll-question-error" className="text-sm text-red-800">
+          <p id="poll-question-error" className="text-sm text-danger-800">
             {errors.question}
           </p>
         ) : null}
@@ -109,7 +109,7 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
           </div>
         ))}
         {errors.options ? (
-          <p id="poll-options-error" className="text-sm text-red-800">
+          <p id="poll-options-error" className="text-sm text-danger-800">
             {errors.options}
           </p>
         ) : null}
@@ -130,7 +130,7 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
           type="checkbox"
           checked={showResults}
           onChange={(e) => setShowResults(e.target.checked)}
-          className="h-5 w-5 accent-blue-700 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700"
+          className="h-5 w-5 accent-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
         />
         Show results to participants
       </label>
@@ -138,7 +138,7 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-blue-700 px-4 py-2 font-medium text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700 disabled:bg-slate-400"
+        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
       >
         {pending ? 'Creating…' : 'Create poll'}
       </button>

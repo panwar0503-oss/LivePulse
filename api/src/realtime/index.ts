@@ -6,8 +6,15 @@ import { Server } from 'socket.io'
 import type { Env } from '../config/env.js'
 import { describeError, type RedisClients } from '../db/redis.js'
 import type { SessionModels } from '../services/sessions.service.js'
+import { createAiEmitters, type AiEmitters } from './ai.js'
 import { createPollEmitters, type LoadPollResults, type PollEmitters } from './polls.js'
 import { createPresence, PRESENCE_COUNT_TIMEOUT_MS } from './presence.js'
+import {
+  createQuestionEmitters,
+  type LoadQuestion,
+  type LoadQuestionUpvotes,
+  type QuestionEmitters,
+} from './questions.js'
 import { createSocketAuth, sessionRoom, type RealtimeServer } from './socket-auth.js'
 import { createWordCloudEmitters, type LoadWordCloud, type WordCloudEmitters } from './word-cloud.js'
 
@@ -35,6 +42,12 @@ export type RealtimeDeps = {
   loadWordCloud: LoadWordCloud
   /** Word-cloud combining window; tests inject a small value. */
   wordCloudCombineMs?: number
+  /** Fresh question read for question:created (see createLoadQuestion). */
+  loadQuestion: LoadQuestion
+  /** Fresh visible-only upvote counts for question:upvotes (see createLoadQuestionUpvotes). */
+  loadQuestionUpvotes: LoadQuestionUpvotes
+  /** Upvote combining window; tests inject a small value. */
+  questionCombineMs?: number
 }
 
 export type Realtime = {
@@ -48,6 +61,10 @@ export type Realtime = {
   polls: PollEmitters
   /** Word-prompt events and combined clouds; call after commit. `close` also clears its timers. */
   wordCloud: WordCloudEmitters
+  /** Q&A events and combined upvote counts; call after commit. `close` also clears its timers. */
+  questions: QuestionEmitters
+  /** AI status, usage and failures, presenter room only; call after commit (runner and switch hooks). */
+  ai: AiEmitters
   close: () => Promise<void>
 }
 
@@ -95,6 +112,9 @@ export const createRealtime = ({
   pollCombineMs,
   loadWordCloud,
   wordCloudCombineMs,
+  loadQuestion,
+  loadQuestionUpvotes,
+  questionCombineMs,
 }: RealtimeDeps): Realtime => {
   const { pubClient, subClient } = redis.adapterClients
   const io: RealtimeServer = new Server(httpServer, {
@@ -117,6 +137,13 @@ export const createRealtime = ({
     logger,
     loadCloud: loadWordCloud,
     combineMs: wordCloudCombineMs,
+  })
+  const questions = createQuestionEmitters({
+    io,
+    logger,
+    loadQuestion,
+    loadUpvotes: loadQuestionUpvotes,
+    combineMs: questionCombineMs,
   })
   io.use(auth.middleware)
 
@@ -148,11 +175,14 @@ export const createRealtime = ({
     clearPresenceTimers: presence.clearPresenceTimers,
     polls,
     wordCloud,
+    questions,
+    ai: createAiEmitters({ io, logger }),
     close: async () => {
       stopWatchingRedis()
       presence.clearPresenceTimers()
       polls.clearPollTimers()
       wordCloud.clearWordCloudTimers()
+      questions.clearQuestionTimers()
       // io.close disconnects every local socket and also closes the attached HTTP server.
       await new Promise<void>((resolve) => {
         void io.close((err) => {

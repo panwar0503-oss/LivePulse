@@ -1,14 +1,30 @@
 import type { Sequelize } from 'sequelize'
+import { AiJob, initAiJob } from './ai-job.model.js'
+import type { AiJobStatus } from './ai-job.model.js'
 import { Participant, initParticipant } from './participant.model.js'
 import { PollOption, initPollOption } from './poll-option.model.js'
 import { Poll, initPoll } from './poll.model.js'
+import { QuestionUpvote, initQuestionUpvote } from './question-upvote.model.js'
+import { Question, initQuestion } from './question.model.js'
 import { Session, initSession } from './session.model.js'
 import { Vote, initVote } from './vote.model.js'
 
 import { WordPrompt, initWordPrompt } from './word-prompt.model.js'
 import { WordResponse, initWordResponse } from './word-response.model.js'
 
-export { Participant, Poll, PollOption, Session, Vote, WordPrompt, WordResponse }
+export {
+  AiJob,
+  Participant,
+  Poll,
+  PollOption,
+  Question,
+  QuestionUpvote,
+  Session,
+  Vote,
+  WordPrompt,
+  WordResponse,
+}
+export type { AiJobStatus }
 
 export type Models = {
   Session: typeof Session
@@ -18,6 +34,9 @@ export type Models = {
   Vote: typeof Vote
   WordPrompt: typeof WordPrompt
   WordResponse: typeof WordResponse
+  Question: typeof Question
+  QuestionUpvote: typeof QuestionUpvote
+  AiJob: typeof AiJob
 }
 
 // Call once per Sequelize instance: models and associations are registered in this one place.
@@ -29,6 +48,11 @@ export const initModels = (sequelize: Sequelize): Models => {
   initVote(sequelize)
   initWordPrompt(sequelize)
   initWordResponse(sequelize)
+  initQuestion(sequelize)
+  initQuestionUpvote(sequelize)
+  initAiJob(sequelize)
+  Session.hasMany(AiJob, { foreignKey: 'sessionId', onDelete: 'CASCADE' })
+  AiJob.belongsTo(Session, { foreignKey: 'sessionId' })
   Session.hasMany(Participant, { foreignKey: 'sessionId', onDelete: 'CASCADE' })
   Participant.belongsTo(Session, { foreignKey: 'sessionId' })
   Session.hasMany(Poll, { foreignKey: 'sessionId', onDelete: 'CASCADE' })
@@ -47,5 +71,24 @@ export const initModels = (sequelize: Sequelize): Models => {
   WordResponse.belongsTo(WordPrompt, { foreignKey: 'promptId' })
   Participant.hasMany(WordResponse, { foreignKey: 'participantId', onDelete: 'CASCADE' })
   WordResponse.belongsTo(Participant, { foreignKey: 'participantId' })
-  return { Session, Participant, Poll, PollOption, Vote, WordPrompt, WordResponse }
+  Session.hasMany(Question, { foreignKey: 'sessionId', onDelete: 'CASCADE' })
+  Question.belongsTo(Session, { foreignKey: 'sessionId' })
+  Participant.hasMany(Question, { foreignKey: 'participantId', onDelete: 'CASCADE' })
+  Question.belongsTo(Participant, { foreignKey: 'participantId' })
+  Question.hasMany(QuestionUpvote, { foreignKey: 'questionId', onDelete: 'CASCADE' })
+  QuestionUpvote.belongsTo(Question, { foreignKey: 'questionId' })
+  Participant.hasMany(QuestionUpvote, { foreignKey: 'participantId', onDelete: 'CASCADE' })
+  QuestionUpvote.belongsTo(Participant, { foreignKey: 'participantId' })
+  return {
+    Session,
+    Participant,
+    Poll,
+    PollOption,
+    Vote,
+    WordPrompt,
+    WordResponse,
+    Question,
+    QuestionUpvote,
+    AiJob,
+  }
 }

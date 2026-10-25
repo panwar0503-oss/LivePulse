@@ -185,7 +185,7 @@ describe('no live message ever carries the presenter key or a cookie value', () 
 
   it('every kind of live message was observed and was one of the documented events', () => {
     const names = new Set([...received, ...presenterReceived].map((m) => m.event))
-    expect([...names].sort()).toEqual(['presence:count', 'session:ended', 'session:error'])
+    expect([...names].sort()).toEqual(['presence:count', 'qna:status', 'session:ended', 'session:error'])
     expect(refusals).toHaveLength(3)
   })
 

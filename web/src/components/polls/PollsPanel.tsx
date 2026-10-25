@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { CreatePollBody, PresenterPoll } from '@livepulse/shared'
 import { StatusMessage } from '../sessions/StatusMessage'
+import { EmptyState } from '../ui/EmptyState'
 import { CreatePollForm } from './CreatePollForm'
 import { PollResults } from './PollResults'
 import { votesText } from './poll-messages'
@@ -25,7 +26,7 @@ export type PollsPanelProps = {
 }
 
 const buttonClass =
-  'rounded px-4 py-2 font-medium focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700 disabled:opacity-50'
+  'inline-flex items-center justify-center gap-2 rounded-xl min-h-11 px-5 font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50'
 
 type ResultsSwitchProps = {
   poll: PresenterPoll
@@ -44,18 +45,18 @@ function ResultsSwitch({ poll, disabled, onToggle }: ResultsSwitchProps) {
         aria-checked={poll.showResults}
         disabled={disabled}
         onClick={() => onToggle(poll.id, !poll.showResults)}
-        className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-slate-700 bg-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700 aria-checked:bg-blue-700 disabled:opacity-50"
+        className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-slate-500 bg-white transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 aria-checked:bg-brand-600 disabled:opacity-50"
       >
         <span
           aria-hidden="true"
-          className={`inline-block h-5 w-5 rounded-full bg-slate-700 transition-transform motion-reduce:transition-none ${
+          className={`inline-block h-5 w-5 rounded-full bg-slate-600 shadow-sm transition-transform duration-150 motion-reduce:transition-none ${
             poll.showResults ? 'translate-x-6 bg-white' : 'translate-x-1'
           }`}
         />
       </button>
       <label htmlFor={id}>
         Show results to participants{' '}
-        <span className="text-sm text-slate-700">({poll.showResults ? 'On' : 'Off'})</span>
+        <span className="text-sm text-muted">({poll.showResults ? 'On' : 'Off'})</span>
       </label>
     </div>
   )
@@ -71,10 +72,15 @@ type OpenPollCardProps = {
 function OpenPollCard({ poll, busy, onClose, onToggleResults }: OpenPollCardProps) {
   const [confirming, setConfirming] = useState(false)
   return (
-    <article aria-label="Open poll" className="flex flex-col gap-4 rounded border border-slate-500 p-4">
+    <article
+      aria-label="Open poll"
+      className="flex flex-col gap-4 rounded-2xl border border-line bg-white p-4"
+    >
       <div className="flex flex-col gap-1">
-        <span className="w-fit rounded border border-slate-700 px-2 py-0.5 text-sm font-semibold">Open</span>
-        <h3 className="text-xl font-bold break-words">{poll.question}</h3>
+        <span className="inline-flex w-fit items-center rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-800">
+          Open
+        </span>
+        <h3 className="text-lg font-semibold break-words">{poll.question}</h3>
       </div>
       <PollResults options={poll.options} results={poll.results} />
       <ResultsSwitch poll={poll} disabled={busy} onToggle={onToggleResults} />
@@ -86,14 +92,14 @@ function OpenPollCard({ poll, busy, onClose, onToggleResults }: OpenPollCardProp
               type="button"
               disabled={busy}
               onClick={() => onClose(poll.id)}
-              className={`${buttonClass} bg-red-800 text-white disabled:bg-slate-400`}
+              className={`${buttonClass} bg-danger-700 text-white enabled:hover:bg-danger-800 disabled:bg-slate-400`}
             >
               {busy ? 'Closing…' : 'Confirm'}
             </button>
             <button
               type="button"
               onClick={() => setConfirming(false)}
-              className={`${buttonClass} border border-slate-700`}
+              className={`${buttonClass} border border-slate-300 bg-white enabled:hover:bg-slate-50`}
             >
               Cancel
             </button>
@@ -105,7 +111,7 @@ function OpenPollCard({ poll, busy, onClose, onToggleResults }: OpenPollCardProp
             type="button"
             disabled={busy}
             onClick={() => setConfirming(true)}
-            className={`${buttonClass} border border-red-800 text-red-900`}
+            className={`${buttonClass} border border-danger-200 bg-white text-danger-700 enabled:hover:bg-danger-50`}
           >
             Close poll
           </button>
@@ -135,15 +141,15 @@ export function PollsPanel({
 
   return (
     <section aria-labelledby="polls-heading" className="flex flex-col gap-4 text-left">
-      <h2 id="polls-heading" className="text-2xl font-bold">
+      <h2 id="polls-heading" className="sr-only">
         Polls
       </h2>
 
       <details
-        className="rounded border border-slate-500 p-4"
+        className="rounded-2xl border border-line bg-white p-4"
         open={polls.length === 0 && status === 'ready'}
       >
-        <summary className="cursor-pointer font-medium focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700">
+        <summary className="cursor-pointer rounded-lg font-medium text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
           Create a poll
         </summary>
         <div className="pt-4">
@@ -160,8 +166,8 @@ export function PollsPanel({
 
       {status === 'loading' ? (
         <div role="status" aria-label="Loading polls" className="flex flex-col gap-3">
-          <div className="h-6 w-2/3 animate-pulse rounded bg-slate-200 motion-reduce:animate-none" />
-          <div className="h-24 w-full animate-pulse rounded bg-slate-200 motion-reduce:animate-none" />
+          <div className="h-6 w-2/3 animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
+          <div className="h-24 w-full animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
         </div>
       ) : null}
 
@@ -169,14 +175,20 @@ export function PollsPanel({
         <div className="flex flex-col gap-3">
           <StatusMessage kind="error">{loadError ?? 'We could not load the polls.'}</StatusMessage>
           <div>
-            <button type="button" onClick={onRetry} className={`${buttonClass} bg-blue-700 text-white`}>
+            <button
+              type="button"
+              onClick={onRetry}
+              className={`${buttonClass} bg-brand-600 text-white enabled:hover:bg-brand-700`}
+            >
               Try again
             </button>
           </div>
         </div>
       ) : null}
 
-      {status === 'ready' && polls.length === 0 ? <p>No polls yet. Create your first poll.</p> : null}
+      {status === 'ready' && polls.length === 0 ? (
+        <EmptyState>No polls yet. Create your first poll.</EmptyState>
+      ) : null}
 
       {status === 'ready' && open ? (
         <OpenPollCard
@@ -190,24 +202,22 @@ export function PollsPanel({
       {status === 'ready' && others.length > 0 ? (
         <ul className="flex flex-col gap-3">
           {others.map((poll) => (
-            <li key={poll.id} className="flex flex-col gap-3 rounded border border-slate-500 p-4">
+            <li key={poll.id} className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-bold break-words">{poll.question}</h3>
-                <span className="rounded border border-slate-700 px-2 py-0.5 text-sm font-semibold">
+                <h3 className="font-semibold break-words">{poll.question}</h3>
+                <span className="inline-flex w-fit items-center rounded-full border border-slate-300 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-muted">
                   {poll.status === 'DRAFT' ? 'Draft' : 'Closed'}
                 </span>
               </div>
               {poll.status === 'DRAFT' ? (
                 <>
-                  {open ? (
-                    <p className="text-sm text-slate-700">Another poll is open. Close it first.</p>
-                  ) : null}
+                  {open ? <p className="text-sm text-muted">Another poll is open. Close it first.</p> : null}
                   <div>
                     <button
                       type="button"
                       disabled={open !== undefined || busyPollId === poll.id}
                       onClick={() => onStart(poll.id)}
-                      className={`${buttonClass} bg-blue-700 text-white disabled:bg-slate-400`}
+                      className={`${buttonClass} bg-brand-600 text-white enabled:hover:bg-brand-700 disabled:bg-slate-400`}
                     >
                       {busyPollId === poll.id ? 'Starting…' : 'Start'}
                     </button>
@@ -215,7 +225,7 @@ export function PollsPanel({
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-slate-700">Final result: {votesText(poll.results.total)}</p>
+                  <p className="text-sm text-muted">Final result: {votesText(poll.results.total)}</p>
                   <PollResults options={poll.options} results={poll.results} />
                   <ResultsSwitch poll={poll} disabled={busyPollId === poll.id} onToggle={onToggleResults} />
                 </>

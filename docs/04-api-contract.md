@@ -32,10 +32,10 @@ Legend: **P** presenter · **A** participant · **Pub** public. Phase in bracket
 | POST   | `/sessions/by-code/:code/join`           | Pub | `{ displayName }` → `201` (`200` if this browser already joined) `{ participant, session }` + participant cookie                                                                                                                                                                                                                                       |
 | GET    | `/sessions/by-code/:code/participant-me` | A   | Restores the participant view from the participant cookie: `200 { participant, session }`; `401` without a matching cookie                                                                                                                                                                                                                             |
 | POST   | `/sessions/:id/presenter-access`         | Pub | `{ presenterKey }` → `204` + presenter cookie; rate limited per session                                                                                                                                                                                                                                                                                |
-| POST   | `/sessions/:id/end`                      | P   | Ending is final; repeat call returns `200` with the same `endedAt`                                                                                                                                                                                                                                                                                     |
+| POST   | `/sessions/:id/end`                      | P   | Ending is final; repeat call returns `200` with the same `endedAt`. Also closes Q&A in the same commit                                                                                                                                                                                                                                                 |
 | GET    | `/sessions/:id/state`                    | P   | Presenter snapshot for (re)connect: `200 { id, title, roomCode, status, endedAt, joinedCount, connectedCount: number \| null }`; `connectedCount` is `null` when the live count cannot be read; `401` without a matching presenter cookie; `404` NOT_FOUND; `400` bad id. Never the key or hash. Poll, prompt and question fields join in later phases |
 | GET    | `/sessions/:id/participants`             | P   | Deferred to the realtime phase                                                                                                                                                                                                                                                                                                                         |
-| PATCH  | `/sessions/:id/settings`                 | P   | `{ aiEnabled?, qnaOpen?, aiModeration? }` [7/9]                                                                                                                                                                                                                                                                                                        |
+| PATCH  | `/sessions/:id/settings`                 | P   | `{ qnaOpen }` [7] (see Q&A below); `aiEnabled`, `aiModeration` [9]                                                                                                                                                                                                                                                                                     |
 
 ### Polls & votes [5]
 
@@ -74,17 +74,41 @@ Word cloud DTOs: `PresenterWordPrompt` is `{ id, question, status, showCloud, cl
 
 ### Q&A [7]
 
-| Method | Path                      | Who    | Notes                                                                              |
-| ------ | ------------------------- | ------ | ---------------------------------------------------------------------------------- |
-| POST   | `/sessions/:id/questions` | A      | `{ text }` → `201 { question }` (status may be `PENDING_REVIEW`)                   |
-| GET    | `/sessions/:id/questions` | P or A | Participants get `VISIBLE`/`ANSWERED` only; presenter gets all, filter by `status` |
-| POST   | `/questions/:id/upvote`   | A      | `201`; duplicate `409`; own question `403`                                         |
-| PATCH  | `/questions/:id`          | P      | `{ status?: HIDDEN                                                                 | VISIBLE | ANSWERED | REJECTED, pinned?, answerText? }` |
+| Method | Path                                | Who | Notes                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------ | ----------------------------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/sessions/by-code/:code/questions` | A   | Participant cookie checked before the body. `{ text }` → `201 { question }`. `400` on field `text` (empty, over 200 characters, control characters); `401 PARTICIPANT_AUTH_REQUIRED`; `404` unknown code; `409 SESSION_ENDED`, `QNA_CLOSED`, `QUESTION_LIMIT_REACHED` (5 per participant per session), `QUESTION_ALREADY_ASKED` (same text again, after normalisation); rate limited 120 per IP per minute |
+| GET    | `/sessions/by-code/:code/questions` | A   | `200 { qnaOpen, questions }`: visible questions only, in server order. `401 PARTICIPANT_AUTH_REQUIRED`; `404` unknown code                                                                                                                                                                                                                                                                                 |
+| GET    | `/sessions/:id/questions`           | P   | `200 { qnaOpen, questions }`: every question, hidden ones included (`hidden` flag). `401 PRESENTER_AUTH_REQUIRED`; `404` NOT_FOUND                                                                                                                                                                                                                                                                         |
+| POST   | `/questions/:id/upvotes`            | A   | No body. Participant of the question's session, cookie checked after the question is loaded. `201 { questionId, myUpvote: true }`. `404` unknown, hidden or missing question; `401 PARTICIPANT_AUTH_REQUIRED` (no cookie, or a cookie of another session); `403 OWN_QUESTION`; `409 SESSION_ENDED`, `QNA_CLOSED`, `UPVOTE_ALREADY_RECORDED`; rate limited 300 per IP per minute                            |
+| PATCH  | `/questions/:id`                    | P   | `{ hidden?, pinned?, answered?, answerText? }`, at least one field → `200 PresenterQuestion`. `answerText: null` clears the answer text. Allowed after the session has ended. `400` on field names or an empty body; `401 PRESENTER_AUTH_REQUIRED`; `404` NOT_FOUND; `409 QUESTION_HIDDEN` (pinning a hidden question); `409 QUESTION_PIN_CONFLICT` (another pin committed at the same time)               |
+| PATCH  | `/sessions/:id/settings`            | P   | `{ qnaOpen }` (no other keys) → `200 { qnaOpen }`. Closing an ended session returns `200` unchanged; opening one → `409 SESSION_ENDED`. Emits `qna:status` only when the value changes. `400`; `401 PRESENTER_AUTH_REQUIRED`; `404` NOT_FOUND                                                                                                                                                              |
+
+- DTOs: `PublicQuestion` = `{ id, text, upvotes, pinned, answered, answerText, answeredAt, createdAt }`;
+  `ParticipantQuestion` = `PublicQuestion` + `{ mine, myUpvote }`; `PresenterQuestion` = `PublicQuestion` + `{ hidden }`.
+- Order (every screen): pinned first, then upvotes (most first), then `createdAt` (oldest first), then `id`.
+- No participant id, name or voter appears in any Q&A response. `text` and `answerText` are plain text.
+- Every `/questions/:id` route takes the session from the question row, never from the request.
 
 ### Reactions [8]
 
 Sent over socket only (`reaction:send`). `GET /sessions/:id/reactions/summary` (P or A) returns totals and a
 per-minute timeline.
+
+### AI foundation (built)
+
+Paths are under `/api`. Requirement: `requirements/ai-foundation/`. Responses never include job input, output or prompts.
+
+| Method | Path                               | Who | Body                 | Success                                                                                                 | Errors                                                                                              |
+| ------ | ---------------------------------- | --- | -------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| GET    | `/sessions/:id/ai`                 | P   | –                    | `200 { enabled, globalEnabled, provider, usage: { tokensUsed, tokenBudget }, recentFailures }` (last 5) | 401, 404                                                                                            |
+| PATCH  | `/sessions/:id/ai`                 | P   | strict `{ enabled }` | `200 { enabled, cancelledJobs }`                                                                        | 400, 409 `SESSION_ENDED`, 503 `AI_DISABLED`                                                         |
+| POST   | `/sessions/:id/ai/jobs/diagnostic` | P   | none                 | `202 { jobId, status, created }` (dedupe key `diagnostic`)                                              | 409 `AI_OFF_FOR_SESSION` / `SESSION_ENDED` / `AI_BUDGET_EXHAUSTED`, 503 `AI_DISABLED`, 429 (10/min) |
+| GET    | `/sessions/:id/ai/jobs/:jobId`     | P   | –                    | `200` job summary (never input or output)                                                               | 401, 404 (also when the job belongs to another session)                                             |
+| PATCH  | `/ops/ai`                          | Op  | strict `{ enabled }` | `200 { enabled }`                                                                                       | 401 (missing or wrong `X-Operator-Key`), 400; 503 when `OPERATOR_KEY` is unset                      |
+
+Op = operator, authenticated by the `X-Operator-Key` header (value from `OPERATOR_KEY`, never logged). Turning it off
+cancels every pending AI job. Rate limit on this route: 10/min. Live updates for these changes: `ai:status`, `ai:usage`
+and `ai:job-failed` (presenter room only, see `05-realtime-events.md`).
 
 ### AI — knowledge base [10]
 

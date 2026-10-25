@@ -13,14 +13,30 @@ import { createHealthRouter } from './routes/health.routes.js'
 import { createSessionsRouter } from './routes/sessions.routes.js'
 import type { ReadinessChecker } from './services/readiness.service.js'
 import { createPollsRouter } from './routes/polls.routes.js'
+import { createQuestionsRouter } from './routes/questions.routes.js'
 import { createWordPromptsRouter } from './routes/word-prompts.routes.js'
 import type { Models } from './models/index.js'
+import { createAiRouter } from './routes/ai.routes.js'
+import { createAiOperatorRouter } from './routes/ai-operator.routes.js'
+import type { AiStateNotice } from './services/ai-jobs.service.js'
+
+/** AI routes are mounted only when this is given (server wiring passes it; see task 13). */
+export type AppAi = {
+  env: Pick<Env, 'AI_PROVIDER' | 'AI_MAX_ATTEMPTS' | 'OPERATOR_KEY'>
+  /** Runner nudge, called after an enqueue commits. */
+  nudge?: () => void
+  /** Presenter-room notice after a switch change commits. */
+  emitAiState?: (notice: AiStateNotice) => void
+  /** From AI_SESSION_TOKEN_BUDGET; new sessions get it as their budget. */
+  aiSessionTokenBudget?: number
+}
 
 // Type-only import: app.ts never loads the realtime module, so there is no runtime cycle.
-// Controllers get the poll and word-cloud emitters but not the shutdown-only timer cleanup.
+// Controllers get the poll, word-cloud, and question emitters but not the shutdown-only timer cleanup.
 export type AppRealtime = Pick<Realtime, 'emitSessionEnded' | 'countConnected'> & {
   polls: Omit<Realtime['polls'], 'clearPollTimers'>
   wordCloud: Omit<Realtime['wordCloud'], 'clearWordCloudTimers'>
+  questions: Omit<Realtime['questions'], 'clearQuestionTimers'>
 }
 
 export type AppDeps = {
@@ -34,6 +50,11 @@ export type AppDeps = {
   voteLimitPerMinute?: number
   /** Tests inject a small value; production uses the router default (300). */
   wordLimitPerMinute?: number
+  /** Tests inject a small value; production uses the router default (120). */
+  questionSubmitLimitPerMinute?: number
+  /** Tests inject a small value; production uses the router default (300). */
+  questionUpvoteLimitPerMinute?: number
+  ai?: AppAi
 }
 
 export const createApp = ({
@@ -45,6 +66,9 @@ export const createApp = ({
   realtime,
   voteLimitPerMinute,
   wordLimitPerMinute,
+  questionSubmitLimitPerMinute,
+  questionUpvoteLimitPerMinute,
+  ai,
 }: AppDeps): Express => {
   const app = express()
   app.disable('x-powered-by')
@@ -70,6 +94,7 @@ export const createApp = ({
       allowedOrigins: env.WEB_ORIGIN,
       webOrigin: env.WEB_ORIGIN[0] ?? '',
       secureCookies: env.NODE_ENV === 'production',
+      aiSessionTokenBudget: ai?.aiSessionTokenBudget,
     }),
   )
 
@@ -96,6 +121,42 @@ export const createApp = ({
       wordLimitPerMinute,
     }),
   )
+
+  app.use(
+    '/api',
+    createQuestionsRouter({
+      sequelize,
+      models,
+      realtime,
+      logger,
+      allowedOrigins: env.WEB_ORIGIN,
+      questionSubmitLimitPerMinute,
+      questionUpvoteLimitPerMinute,
+    }),
+  )
+
+  if (ai) {
+    app.use(
+      '/api',
+      createAiRouter({
+        sequelize,
+        models,
+        env: ai.env,
+        nudge: ai.nudge,
+        emitAiState: ai.emitAiState,
+        allowedOrigins: env.WEB_ORIGIN,
+      }),
+    )
+    app.use(
+      '/api',
+      createAiOperatorRouter({
+        sequelize,
+        emitAiState: ai.emitAiState,
+        allowedOrigins: env.WEB_ORIGIN,
+        operatorKey: ai.env.OPERATOR_KEY,
+      }),
+    )
+  }
 
   app.use(notFound)
   app.use(createErrorHandler(logger))

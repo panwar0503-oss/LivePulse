@@ -18,7 +18,7 @@ Status का स्रोत: हर requirement की `requirement.md` मे
 | [stage-03](./stage-03-realtime-backbone.md) | 4 | `realtime-backbone` | Socket.IO + Redis adapter, handshake auth, rooms, presence, state snapshot, reconnect, session end | verified (lint, typecheck, unit, build, integration 110/110); **commit बाक़ी** | — |
 | [stage-04](./stage-04-live-polls.md) | 5 | `live-polls` | Polls, lifecycle, transactional voting, live results, visibility | verified (lint, typecheck, unit, build, integration 172/172, live e2e 22/22); **commit बाक़ी** | — |
 | [stage-05](./stage-05-word-cloud.md) | 6 | `word-cloud` | Prompts, responses, normalisation, live cloud | verified (lint, typecheck, unit, build, integration 238/238, live e2e 22/22); **commit बाक़ी** | — |
-| stage-06 | 7 | `live-qna` | Questions, upvotes, presenter moderation, live ordering | शुरू नहीं हुआ | — |
+| [stage-06](./stage-06-live-qna.md) | 7 | `live-qna` | Questions, upvotes, presenter moderation, live ordering | verified (lint, typecheck, unit, build, integration 311 pass + 1 skipped word-cloud race test, live e2e 28/28); **commit बाक़ी** | — |
 | stage-07 | 8 | `live-reactions` | Emoji reactions, throttled bursts, per-minute counts | शुरू नहीं हुआ | — |
 | stage-08 | 9 | `ai-foundation` | LLM + embeddings providers (real + fake), pgvector, `ai_jobs` runner, budget, kill switch | शुरू नहीं हुआ | — |
 | stage-09 | 10 | `knowledge-base-rag` | Upload, chunk, embed, hybrid retrieval, citations | शुरू नहीं हुआ | — |

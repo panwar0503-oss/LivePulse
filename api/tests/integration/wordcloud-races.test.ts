@@ -158,7 +158,9 @@ describe('word cloud races at the route level', () => {
     expect(outcomes.recorded + outcomes.refused).toBe(ITERATIONS)
   })
 
-  it('ending a session while a submission is in flight counts that word and closes the prompt exactly once', async () => {
+  // SKIPPED on the developer's instruction (2026-10-24) while the intermittent failure is investigated.
+  // Open issue in requirements/live-qna/planning-tracking.md. Re-enable with `it(` once it is fixed.
+  it.skip('ending a session while a submission is in flight counts that word and closes the prompt exactly once', async () => {
     for (let i = 0; i < ITERATIONS; i += 1) {
       const session = await createSessionFixture(models)
       const participant = await createParticipantFixture(models, session.id)
@@ -193,7 +195,7 @@ describe('word cloud races at the route level', () => {
       expect(closedEmits).toEqual([prompt.id])
       expect((await endSession({ sequelize, models }, session.id)).closedPrompt).toBeNull()
     }
-  })
+  }, 30_000)
 
   it('two identical submissions from one participant at the same time store exactly one word', async () => {
     const session = await createSessionFixture(models)

@@ -1,6 +1,6 @@
 # 05 — Socket.IO Events
 
-Phases 4 (realtime-backbone), 5 (live polls) and 6 (word cloud) are built. Sections 1, 2, 4 and 5 describe what the code does today. Events for later phases are listed separately in section 6.
+Phases 4 (realtime-backbone), 5 (live polls), 6 (word cloud) and 7 (live Q&A) are built. Sections 1, 2, 4 and 5 describe what the code does today. Events for later phases are listed separately in section 6.
 
 ## 1. General rules
 - Event maps and payload schemas live in `shared/src/events/realtime.ts`; payloads are validated with Zod on the server.
@@ -37,7 +37,8 @@ No client → server events exist yet. Any client event is ignored by the server
 Votes are HTTP, not socket commands: `POST /api/polls/:id/votes` reuses cookie auth, rate limits and the error envelope.
 Word submissions are HTTP too: `POST /api/word-prompts/:id/responses`.
 
-Later phases add commands (`question:submit`, `question:upvote`, `reaction:send`). They are not built yet and are listed in section 6.
+Later phases add commands (`reaction:send`, Phase 8). It is not built yet and is listed in section 6.
+Q&A has no socket commands: questions and upvotes are HTTP (`POST /api/sessions/by-code/:code/questions`, `POST /api/questions/:id/upvotes`).
 
 Ack convention for those later commands: `{ success: true, data }` or `{ success: false, error: { code, message } }`, using the HTTP error codes. This is the decided shape; no command event uses it yet.
 
@@ -56,6 +57,10 @@ Ack convention for those later commands: `{ success: true, data }` or `{ success
 | `wordcloud:closed` | session | `{ promptId, closedAt }` | Sent after the close commits, and when starting another prompt or ending the session closes the open one. |
 | `wordcloud:updated` | session | `{ promptId, showCloud }` | Sent only when the switch changes. Clients refetch. |
 | `wordcloud:results` | presenter room when `showCloud` is false, session room when true | `{ promptId, total, version, entries: [{ key, word, count }] }` | Cloud for one prompt. `version` is the total response count; clients drop any update not newer. |
+| `question:created` | session | `{ question: PublicQuestion }` | Read fresh after the commit; nothing is sent if the question is hidden by then. New questions have 0 upvotes. |
+| `question:upvotes` | session | `{ version, questions: [{ id, upvotes }] }` | Visible questions only, in server order. `version` is the total upvote rows in the session; clients drop any update not newer. |
+| `question:updated` | session | `{ questionId }` | Sent after a pin, hide/restore or answer change commits. Clients refetch. |
+| `qna:status` | session | `{ open }` | Sent when the Q&A switch changes, and when ending the session closes an open Q&A. |
 
 Poll rules:
 - Participants never receive `poll:results` while results are hidden: the room is chosen from a fresh database read at send time, and participants are not in the presenter room.
@@ -70,6 +75,13 @@ Word cloud rules:
 - Closing a prompt (or ending the session with one open) sends `wordcloud:results` first, then `wordcloud:closed`. Starting a prompt while another is open closes the old one the same way, then sends `wordcloud:started`. Changing the switch sends `wordcloud:updated`, then `wordcloud:results` with the current cloud.
 - Clients refetch the prompt over HTTP on `wordcloud:started`, `wordcloud:closed`, `wordcloud:updated`, and on every connect. Only `wordcloud:results` is applied directly.
 - No participant identity appears in any word-cloud payload.
+
+Q&A rules:
+- Every Q&A event goes to the session room. Only visible questions are sent; a hidden question is never sent to participants.
+- Upvote counts are combined per session (about 250 ms). Each send reads the counts fresh from PostgreSQL, in server order.
+- Hiding or restoring a question sends `question:updated`, then a fresh `question:upvotes`. A pin or answer change sends `question:updated` only.
+- Clients refetch the list over HTTP on `question:updated`, `qna:status` and every connect. Only `question:upvotes` is applied directly, and only when its `version` is newer.
+- No participant identity (id, name, voter) appears in any Q&A payload.
 
 Presence rules:
 - The count is the number of distinct participants (`participantId`) connected to the session across every instance. Two tabs from one participant count once.
@@ -99,15 +111,13 @@ Client reconnect:
 
 These events are planned and do not exist in the code yet. They are listed for reference only.
 
-Client → server (commands): `question:submit` (7), `question:upvote` (7), `reaction:send` (8).
+Client → server (commands): `reaction:send` (8).
 
 Server → client:
 
 | Event | Room | Payload | Phase |
 |---|---|---|---|
-| `question:created` | session (VISIBLE) / presenter (PENDING_REVIEW) | `{ question }` | 7 |
-| `question:updated` | session / presenter | `{ questionId, upvoteCount?, status?, pinned?, version }` | 7 |
-| `question:answered` | session | `{ questionId, answerText, aiAssisted, answeredAt }` | 7/12 |
+| `question:answered` | session | `{ questionId, answerText, aiAssisted, answeredAt }` | 12 (AI-approved answers; Phase 7 answers arrive as `question:updated`) |
 | `reaction:burst` | session | `{ counts: { "👍": 3, … }, windowMs }` (throttled ~500 ms) | 8 |
 | `ai:knowledge-updated` | presenter | `{ documentId, status, chunkCount }` | 10 |
 | `ai:poll-suggestions-ready` | presenter | `{ jobId, suggestions[] }` | 11 |
@@ -116,8 +126,9 @@ Server → client:
 | `ai:question-merged` | presenter + asker | `{ questionId, duplicateOfId }` | 12 |
 | `ai:insights-updated` | presenter | `{ kind, payload, version }` | 13 |
 | `ai:report-ready` | presenter | `{ sessionId }` | 14 |
-| `ai:job-failed` | presenter | `{ jobId, type, code, message }` | 9 |
-| `ai:usage` | presenter | `{ tokensUsed, budget }` | 9 |
+| `ai:status` | presenter | `{ sessionId, enabled, globalEnabled }` | ai-foundation |
+| `ai:usage` | presenter | `{ sessionId, tokensUsed, tokenBudget }` (includes reservations) | ai-foundation |
+| `ai:job-failed` | presenter | `{ sessionId, jobId, type, taskName, errorCode, message, failedAt }` (fixed message per code) | ai-foundation |
 
 Participants never receive AI drafts, held questions, moderation labels, or other participants' tokens.
 

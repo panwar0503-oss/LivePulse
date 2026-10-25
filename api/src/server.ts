@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import type { Logger } from 'pino'
+import { startAi } from './ai/startup.js'
 import { createApp } from './app.js'
 import { loadEnv, type Env } from './config/env.js'
 import { createLogger } from './config/logger.js'
@@ -10,6 +11,7 @@ import { createSequelize } from './db/sequelize.js'
 import { initModels } from './models/index.js'
 import { createRealtime } from './realtime/index.js'
 import { createLoadPollResults } from './realtime/polls.js'
+import { createLoadQuestion, createLoadQuestionUpvotes } from './realtime/questions.js'
 import { createLoadWordCloud } from './realtime/word-cloud.js'
 import { createReadinessChecker } from './services/readiness.service.js'
 import { createShutdown, type Shutdown } from './shutdown.js'
@@ -76,6 +78,17 @@ const main = async (): Promise<void> => {
     models,
     loadPollResults: createLoadPollResults({ sequelize, models }),
     loadWordCloud: createLoadWordCloud({ sequelize, models }),
+    loadQuestion: createLoadQuestion({ sequelize, models }),
+    loadQuestionUpvotes: createLoadQuestionUpvotes({ sequelize, models }),
+  })
+  // Before any request: sets the global AI switch, selects the provider, recovers stale jobs, starts the runner.
+  const ai = await startAi({
+    env,
+    sequelize,
+    models,
+    logger,
+    emit: realtime.ai.onRunnerEvent,
+    emitAiState: realtime.ai.onAiStateChanged,
   })
   const app = createApp({
     env,
@@ -88,7 +101,9 @@ const main = async (): Promise<void> => {
       countConnected: realtime.countConnected,
       polls: realtime.polls,
       wordCloud: realtime.wordCloud,
+      questions: realtime.questions,
     },
+    ai: ai.app,
   })
   httpServer.on('request', app)
   httpServer.listen(env.PORT, () => {
@@ -96,7 +111,7 @@ const main = async (): Promise<void> => {
   })
 
   // Idempotent and bounded by SHUTDOWN_TIMEOUT_MS (see shutdown.ts for the order).
-  const shutdown = createShutdown({ realtime, redis, sequelize, logger })
+  const shutdown = createShutdown({ realtime, redis, sequelize, logger, aiRunner: ai.runner })
   lifecycle.shutdown = shutdown
   process.on('SIGINT', () => void shutdown('SIGINT'))
   process.on('SIGTERM', () => void shutdown('SIGTERM'))

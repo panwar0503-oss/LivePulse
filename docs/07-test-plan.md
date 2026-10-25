@@ -31,9 +31,11 @@ Empty/oversized rejected · whitespace and casing normalised · script-like text
 per participant per prompt · rate limit · empty cloud returns `{ total: 0, version: 0, entries: [] }` · stable top-N ordering.
 
 ### Q&A
-Submit + rate limit · one upvote per participant (concurrent upvotes → one) · cannot upvote own question ·
-upvote count matches rows · ordering by upvotes then age · participants never see HIDDEN/PENDING_REVIEW/REJECTED ·
-presenter-only moderation actions · answered questions broadcast.
+Submit + rate limit · 5-question cap under parallel submits (six → five) · same text twice → one row, 409 ·
+one upvote per participant (concurrent or two-tab upvotes → one) · cannot upvote own question (403) · hidden question
+upvote → 404 · upvote count matches rows · ordering by upvotes then age, pinned first · participants never receive
+hidden questions over HTTP or socket · pin race → one pinned · close and end vs submit · presenter-only moderation
+(401 without the presenter cookie) · answers and pins broadcast as `question:updated`.
 
 ### Reactions
 Unknown emoji rejected · rate limit per participant · bursts aggregated (N taps → one burst event per window) ·
@@ -50,6 +52,15 @@ Provider selected from env · `fake` provider deterministic · missing API key f
 code · stale RUNNING jobs resumed on start · budget exceeded → SKIPPED + presenter event · `AI_ENABLED=false`
 → endpoints return `AI_DISABLED`, core flows unaffected · no LLM call inside a DB transaction · invalid model
 output (schema mismatch) handled.
+
+AI test groups (built): unit `ai/providers/providers.test.ts`, `ai/embeddings/embeddings.test.ts`, `ai/tasks/ping.test.ts`,
+`shared/src/schemas/ai.test.ts`; integration `ai-jobs-service`, `ai-models`, `ai-routes`, `ai-runner`, `ai-startup`,
+`pgvector-probe`; realtime `ai-events`; web `components/ai/ai-panel.test.tsx`. All use the `fake` provider, no network.
+
+Opt-in live tests (never in default runs, cost money): `api/tests/live/anthropic-smoke.live.test.ts` (one real Claude
+request) and `api/tests/live/local-embeddings.live.test.ts` (loads the local model, checks vector length 384). Run with
+`npm run test:live -w api`; they are skipped unless `ANTHROPIC_API_KEY` is set (the smoke test) and `AI_LIVE_TEST=1`
+(set by `vitest.live.config.ts`). Not run in this session.
 
 ### Knowledge base (RAG)
 Accepts PDF/MD/TXT, rejects others by content sniffing (415) and size (413) · chunking boundaries and overlap ·

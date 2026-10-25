@@ -40,6 +40,7 @@ describe('ending a session notifies everyone in it', () => {
         countConnected: realtime.countConnected,
         polls: realtime.polls,
         wordCloud: realtime.wordCloud,
+        questions: realtime.questions,
         emitSessionEnded: () => {
           throw new Error('publish failed')
         },

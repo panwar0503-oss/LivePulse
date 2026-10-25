@@ -6,9 +6,9 @@ export type StatusMessageProps = {
 }
 
 const STYLES = {
-  error: 'border-red-700 bg-red-50 text-red-900',
-  success: 'border-green-700 bg-green-50 text-green-900',
-  info: 'border-slate-500 bg-slate-50 text-slate-900',
+  error: 'border-danger-700 bg-danger-50 text-danger-900',
+  success: 'border-success-700 bg-success-50 text-success-900',
+  info: 'border-brand-600 bg-brand-50 text-ink',
 } as const
 
 const LABELS = { error: 'Error: ', success: 'Success: ', info: 'Note: ' } as const
@@ -19,7 +19,7 @@ export function StatusMessage({ kind, children }: StatusMessageProps) {
     <p
       role={kind === 'error' ? 'alert' : 'status'}
       aria-live={kind === 'error' ? 'assertive' : 'polite'}
-      className={`rounded border-l-4 p-3 text-left text-sm ${STYLES[kind]}`}
+      className={`rounded-xl border-l-4 p-3 text-left text-sm ${STYLES[kind]}`}
     >
       <span className="font-semibold">{LABELS[kind]}</span>
       {children}

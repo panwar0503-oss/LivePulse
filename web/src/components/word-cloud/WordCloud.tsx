@@ -23,24 +23,24 @@ export function WordCloud({ cloud, label = 'Word cloud' }: WordCloudProps) {
   const max = cloud.entries.reduce((m, e) => Math.max(m, e.count), 0)
   return (
     <div className="flex flex-col gap-2">
-      <p aria-live="polite" aria-atomic="true" className="text-sm text-slate-700">
+      <p aria-live="polite" aria-atomic="true" className="text-sm text-muted">
         <span className="sr-only">{label}: </span>
         {answersText(cloud.total)}
       </p>
       <ul
         aria-label={label}
-        className="flex min-h-40 flex-wrap content-start items-baseline gap-x-4 gap-y-2 rounded border border-slate-300 bg-slate-50 p-4"
+        className="flex min-h-40 flex-wrap content-start items-baseline gap-x-4 gap-y-2 rounded-2xl border border-line bg-slate-50 p-4"
       >
         {cloud.entries.length === 0 ? (
-          <li className="text-slate-700">No words yet. Answers will appear here.</li>
+          <li className="text-muted">No words yet. Answers will appear here.</li>
         ) : (
           cloud.entries.map((entry) => (
             <li
               key={entry.key}
-              className={`${sizeClassFor(entry.count, max)} font-semibold leading-tight break-words text-blue-700 transition-[font-size] duration-300 motion-reduce:transition-none`}
+              className={`${sizeClassFor(entry.count, max)} font-semibold leading-tight break-words text-brand-700 transition-[font-size] duration-300 motion-reduce:transition-none`}
             >
               {entry.word}
-              <span className="ml-1 text-sm font-normal text-slate-700">
+              <span className="ml-1 text-sm font-normal text-muted">
                 <span className="sr-only">, </span>
                 {entry.count}
                 <span className="sr-only"> {entry.count === 1 ? 'time' : 'times'}</span>

@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { aiErrorCodeSchema, taskTypeSchema } from '../schemas/ai.js'
 import { pollOptionDtoSchema, pollResultsSchema } from '../schemas/polls.js'
+import { publicQuestionSchema } from '../schemas/qna.js'
 import { roomCodeSchema } from '../schemas/sessions.js'
 import { wordCloudSchema } from '../schemas/word-cloud.js'
 
@@ -65,6 +67,41 @@ export const wordcloudUpdatedSchema = z.object({
 
 export const wordcloudResultsSchema = wordCloudSchema.extend({ promptId: z.string().uuid() })
 
+// Public question fields only; no voter or author identity travels in any Q&A event.
+export const questionCreatedSchema = z.object({ question: publicQuestionSchema })
+
+export const questionUpvotesSchema = z.object({
+  version: z.number().int().min(0),
+  questions: z.array(z.object({ id: z.string().uuid(), upvotes: z.number().int().min(0) })),
+})
+
+export const questionUpdatedSchema = z.object({ questionId: z.string().uuid() })
+
+export const qnaStatusSchema = z.object({ open: z.boolean() })
+
+// AI events carry ids, flags and numbers only; failure text is fixed per code, never provider output.
+export const aiStatusSchema = z.object({
+  sessionId: z.string().uuid(),
+  enabled: z.boolean(),
+  globalEnabled: z.boolean(),
+})
+
+export const aiUsageSchema = z.object({
+  sessionId: z.string().uuid(),
+  tokensUsed: z.number().int().min(0),
+  tokenBudget: z.number().int().min(1),
+})
+
+export const aiJobFailedSchema = z.object({
+  sessionId: z.string().uuid(),
+  jobId: z.string().uuid(),
+  type: taskTypeSchema,
+  taskName: z.string(),
+  errorCode: aiErrorCodeSchema,
+  message: z.string(),
+  failedAt: z.string().datetime(),
+})
+
 // Handshake auth is chosen by role. Identity (cookie) is checked on the server, never trusted from this payload.
 export const handshakeAuthSchema = z.discriminatedUnion('role', [
   z.object({ role: z.literal('presenter'), sessionId: z.string().uuid() }),
@@ -85,6 +122,15 @@ export type WordcloudClosed = z.infer<typeof wordcloudClosedSchema>
 export type WordcloudUpdated = z.infer<typeof wordcloudUpdatedSchema>
 export type WordcloudResults = z.infer<typeof wordcloudResultsSchema>
 
+export type QuestionCreated = z.infer<typeof questionCreatedSchema>
+export type QuestionUpvotes = z.infer<typeof questionUpvotesSchema>
+export type QuestionUpdated = z.infer<typeof questionUpdatedSchema>
+export type QnaStatus = z.infer<typeof qnaStatusSchema>
+
+export type AiStatus = z.infer<typeof aiStatusSchema>
+export type AiUsage = z.infer<typeof aiUsageSchema>
+export type AiJobFailed = z.infer<typeof aiJobFailedSchema>
+
 export interface ServerToClientEvents {
   'presence:count': (payload: PresenceCount) => void
   'session:ended': (payload: SessionEnded) => void
@@ -97,6 +143,13 @@ export interface ServerToClientEvents {
   'wordcloud:closed': (payload: WordcloudClosed) => void
   'wordcloud:updated': (payload: WordcloudUpdated) => void
   'wordcloud:results': (payload: WordcloudResults) => void
+  'question:created': (payload: QuestionCreated) => void
+  'question:upvotes': (payload: QuestionUpvotes) => void
+  'question:updated': (payload: QuestionUpdated) => void
+  'qna:status': (payload: QnaStatus) => void
+  'ai:status': (payload: AiStatus) => void
+  'ai:usage': (payload: AiUsage) => void
+  'ai:job-failed': (payload: AiJobFailed) => void
 }
 
 // No client-to-server events in this phase. Any client event name is typed as never.

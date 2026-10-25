@@ -27,7 +27,7 @@ export const joinErrorText = (error: { code: string; message: string }): string 
 }
 
 const inputClass =
-  'w-full rounded border border-slate-500 p-2 focus:outline focus:outline-2 focus:outline-blue-700'
+  'w-full rounded-xl border border-slate-500 bg-white px-3 py-2 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
 
 export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmit }: JoinFormProps) {
   const [roomCode, setRoomCode] = useState(initialRoomCode)
@@ -76,7 +76,7 @@ export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmi
           className={`${inputClass} uppercase tracking-widest`}
         />
         {errors.roomCode ? (
-          <p id="roomCode-error" className="text-sm text-red-800">
+          <p id="roomCode-error" className="text-sm text-danger-800">
             {errors.roomCode}
           </p>
         ) : null}
@@ -99,7 +99,7 @@ export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmi
           className={inputClass}
         />
         {errors.displayName ? (
-          <p id="displayName-error" className="text-sm text-red-800">
+          <p id="displayName-error" className="text-sm text-danger-800">
             {errors.displayName}
           </p>
         ) : null}
@@ -107,7 +107,7 @@ export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmi
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-blue-700 px-4 py-2 font-medium text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-blue-700 disabled:bg-slate-400"
+        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
       >
         {pending ? 'Joining…' : 'Join session'}
       </button>
