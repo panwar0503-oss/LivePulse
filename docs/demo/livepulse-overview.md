@@ -1,4 +1,4 @@
-# LivePulse — Complete Product, Architecture and Specification Guide (English)
+# LivePulse — Complete Product, Architecture and Specification Guide 
 
 Version: prototype · Date: 2026-10-27 · Audience: company demo, HR, engineering, leadership
 
