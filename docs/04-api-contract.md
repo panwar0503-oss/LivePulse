@@ -2,7 +2,7 @@
 
 ## 1. Conventions
 
-- Base path `/api`. JSON in/out except document upload (multipart).
+- Base path `/api`. JSON in/out except knowledge document upload (raw file bytes, see below).
 - Success: `{ "success": true, "data": … }` · Error: `{ "success": false, "error": { "code", "message", "details"? } }`
 - Stable error codes (e.g. `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `SESSION_ENDED`,
   `POLL_NOT_ACTIVE`, `VOTE_ALREADY_RECORDED`, `RATE_LIMITED`, `AI_DISABLED`, `AI_BUDGET_EXCEEDED`, `AI_UNAVAILABLE`).
@@ -110,14 +110,101 @@ Op = operator, authenticated by the `X-Operator-Key` header (value from `OPERATO
 cancels every pending AI job. Rate limit on this route: 10/min. Live updates for these changes: `ai:status`, `ai:usage`
 and `ai:job-failed` (presenter room only, see `05-realtime-events.md`).
 
-### AI — knowledge base [10]
+### Knowledge base [10] (built)
 
-| Method | Path                             | Who | Notes                                                                                        |
-| ------ | -------------------------------- | --- | -------------------------------------------------------------------------------------------- |
-| POST   | `/sessions/:id/knowledge`        | P   | multipart `file` (PDF/MD/TXT, size + page limits) → `202 { documentId, status: PROCESSING }` |
-| GET    | `/sessions/:id/knowledge`        | P   | Documents with status and chunk count                                                        |
-| DELETE | `/knowledge/:documentId`         | P   | Deletes document + chunks                                                                    |
-| POST   | `/sessions/:id/knowledge/search` | P   | `{ query, k? }` → chunks with scores (debug/demo of retrieval)                               |
+Presenter only. Requirement: `requirements/knowledge-base-rag/`. Responses never include file bytes, content hashes or
+embeddings. Every route checks the presenter cookie for the path's session (401 without it; 404 for a missing or another
+presenter's session).
+
+| Method | Path                                       | Who | Body                                            | Success                                             | Errors                                                                                                                                                                                                               |
+| ------ | ------------------------------------------ | --- | ----------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/sessions/:id/knowledge/documents`        | P   | Raw file bytes; header `X-File-Name` (required) | `201` `KnowledgeDocument` with `status: PROCESSING` | 400 `INVALID_FILE_NAME`, `EMPTY_FILE`; 409 `DUPLICATE_DOCUMENT`, `DOCUMENT_LIMIT_REACHED`, `SESSION_ENDED`, `AI_OFF_FOR_SESSION`; 413 `FILE_TOO_LARGE`; 415 `UNSUPPORTED_FILE_TYPE`; 429 (10/min); 503 `AI_DISABLED` |
+| GET    | `/sessions/:id/knowledge/documents`        | P   | –                                               | `200 { documents }` (at most 20, oldest first)      | 401, 404                                                                                                                                                                                                             |
+| DELETE | `/sessions/:id/knowledge/documents/:docId` | P   | –                                               | `204`                                               | 401, 404                                                                                                                                                                                                             |
+| POST   | `/sessions/:id/knowledge/search`           | P   | `{ query }`, 1–500 characters (30/min)          | `200 { results, reranked }`                         | 400, 401, 404, 503 `KNOWLEDGE_UNAVAILABLE`                                                                                                                                                                           |
+
+- **Upload:** the body is the raw file, not multipart. `express.raw` with a 10 MB limit applies to this route only. The
+  checks run in this order: presenter cookie, rate limit, Content-Length (413 before buffering), file name, then content.
+  The name must be a plain name ending in `.pdf` or `.txt` (case-insensitive). The browser percent-encodes the name with
+  `encodeURIComponent` because header values are Latin-1 only; the server decodes it, and a bad encoding returns 400
+  `INVALID_FILE_NAME`.
+- **Upload result:** the document is `PROCESSING` when the response is sent. Processing runs in the background; its
+  outcome arrives as `knowledge:document-status` and in the next list.
+- **`KnowledgeDocument`:** `{ id, fileName, mimeType, sizeBytes, status, failureReason, pageCount, passageCount, createdAt }`.
+  `status` is `PROCESSING`, `READY` or `FAILED`. `failureReason` is `null` unless `FAILED`: `NO_TEXT`, `UNREADABLE`,
+  `TOO_MANY_PAGES`, `TOO_LARGE_TEXT`, `TIMEOUT` or `PROCESSING_STOPPED`.
+- **Search result:** each result has the passage text, its document name and location (page number for PDF, section number
+  for text) and a score. Results are in rank order. No relevant passage gives `200` with an empty `results` list, never an
+  invented one. `reranked` is `false` when the reranker was unavailable and the fused order was returned.
+
+### Poll suggestions [11] (built)
+
+Presenter only. Requirement: `requirements/ai-poll-generator/`. The POST route checks the origin and the presenter cookie
+for the path's session; a missing cookie or a participant's cookie gets 401, and a missing or another presenter's session
+gets 404. Suggestions are drafts for the presenter only: they are not polls and never reach participants. Passage text
+appears only in these responses.
+
+| Method | Path                                    | Who | Body          | Success                          | Errors                                                                                                                                              |
+| ------ | --------------------------------------- | --- | ------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/sessions/:id/poll-suggestions`        | P   | `{}` (strict) | `202 { jobId, status, created }` | 400, 401, 404, 409 `AI_OFF_FOR_SESSION`, `AI_BUDGET_EXHAUSTED`, `SESSION_ENDED`, `NO_RELEVANT_PASSAGES`; 429 (6/min per session); 503 `AI_DISABLED` |
+| GET    | `/sessions/:id/poll-suggestions/latest` | P   | –             | `200` DTO, or `null` if none     | 401, 404                                                                                                                                            |
+| GET    | `/sessions/:id/poll-suggestions/:jobId` | P   | –             | `200` DTO                        | 401, 404 (missing, another session, or not a `SUGGEST_POLLS` job)                                                                                   |
+
+- **Request:** `created` is `true` for a new job. A repeat request within 30 seconds of a finished job, or while one is
+  in flight, returns that job with `created: false`. No second job is queued. A session with no READY passage gets 409
+  `NO_RELEVANT_PASSAGES` before any job exists.
+- **DTO:** `{ jobId, status, errorCode, message, outcome, suggestions }`. `outcome` is `PENDING`, `READY`, `NONE` or
+  `FAILED`. `suggestions` is a list of `{ index, question, options, source: { documentName, location, text } }`, with
+  2 to 4 options each and at most 3 items. `source` is taken from READY passages at read time, so a suggestion whose
+  document was deleted is no longer returned.
+- **Latest:** returns the DTO of the newest request, or `null`. It returns `null` once the session has ended.
+- Model output is checked against a strict schema; malformed items are dropped and never returned.
+
+### AI Q&A copilot [12] (built)
+
+Presenter only. Requirement: `requirements/ai-qna-copilot/`. Every route checks the origin (403 `FORBIDDEN_ORIGIN`)
+and the presenter cookie for the path's session (401 `PRESENTER_AUTH_REQUIRED` without it). Every draft and question is
+looked up by id and session, so another session's row gets 404 `NOT_FOUND`. The four mutations share a rate limit of
+60 per minute per session (429 `RATE_LIMITED`). Moderation labels and drafts appear in these presenter responses only. Draft text is never sent over a socket.
+
+| Method | Path                                              | Who | Body                          | Success                                                         | Errors                                                                                                              |
+| ------ | ------------------------------------------------- | --- | ----------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/sessions/:id/qna/review`                        | P   | –                             | `200 { held, drafts }`                                          | 401, 404                                                                                                            |
+| POST   | `/sessions/:id/qna/drafts/:draftId/approve`       | P   | `{ text? }` (strict, max 500) | `200` `PresenterQuestion` (the question now carries the answer) | 400 `VALIDATION_ERROR`, 401, 404, 409 `DRAFT_NOT_PENDING`, `QUESTION_NOT_VISIBLE`, `QUESTION_ALREADY_ANSWERED`, 429 |
+| POST   | `/sessions/:id/qna/drafts/:draftId/reject`        | P   | none (or `{}`)                | `200 { ok: true }`                                              | 400, 401, 404, 409 `DRAFT_NOT_PENDING`, 429                                                                         |
+| POST   | `/sessions/:id/qna/questions/:questionId/release` | P   | none (or `{}`)                | `200` `PresenterQuestion` (now `VISIBLE`)                       | 400, 401, 404, 409 `QUESTION_NOT_HELD`, 429                                                                         |
+| POST   | `/sessions/:id/qna/questions/:questionId/reject`  | P   | none (or `{}`)                | `200 { ok: true }` (question `REJECTED`)                        | 400, 401, 404, 409 `QUESTION_NOT_HELD`, 429                                                                         |
+| GET    | `/sessions/:id/qna/clusters`                      | P   | –                             | `200 { clusters }`                                              | 401, 404                                                                                                            |
+
+- **Review:** `held` lists the session's HELD questions (`questionId`, `text`, `label`, `createdAt`). `label` is `null`
+  when the question was never classified (held by the session end). `drafts` lists only DRAFTING and PENDING_REVIEW
+  drafts, each with `id`, `questionId`, `questionText`, `status`, `outcome` (`GROUNDED` or `NOT_COVERED`), `text`,
+  `language`, `confidence` and `citations`. Citations carry the document name and location; `quote` is always `null`.
+- **Approve:** the draft must be PENDING_REVIEW, its question VISIBLE and unanswered. `text` is optional; without it the
+  draft's own text is published. The approved text becomes the question's answer, exactly once. Drafts still DRAFTING
+  cannot be approved (409 `DRAFT_NOT_PENDING`).
+- **Reject draft:** the draft becomes REJECTED. The question stays VISIBLE and unanswered.
+- **Release and reject question:** only for HELD questions. Release makes the question VISIBLE and creates no draft
+  (the presenter answers by hand). Reject makes it REJECTED.
+- **Clusters:** `{ clusters: [{ id, label, size, questionIds }] }`, from VISIBLE questions only, largest first. The list
+  is empty until there are at least 3 clustered questions. `label` is the text of the earliest question in the cluster.
+
+### Session report and chat [14] (built)
+
+Presenter only. Requirement: `requirements/ai-session-report/`. Every route checks the presenter cookie for the path's session (401 without it; 404 for a missing or another presenter's session). The POST route also checks the origin (403 `FORBIDDEN_ORIGIN`). The report has no table: it is computed from the session's data on each read. The report works with AI off; the chat needs AI on.
+
+| Method | Path                          | Who | Body                                                               | Success                                                                                                                          | Errors                                                                                                                                                                              |
+| ------ | ----------------------------- | --- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/sessions/:id/report`        | P   | –                                                                  | `200` `SessionReport`: poll results, top word-cloud terms, question counts, top-upvoted questions, knowledge documents, AI usage | 401, 404                                                                                                                                                                            |
+| GET    | `/sessions/:id/report/export` | P   | –                                                                  | `200` JSON attachment with the same `SessionReport` DTO                                                                          | 401, 404                                                                                                                                                                            |
+| GET    | `/sessions/:id/report/chat`   | P   | –                                                                  | `200 { turns }`: this session's chat history                                                                                     | 401, 404                                                                                                                                                                            |
+| POST   | `/sessions/:id/report/chat`   | P   | strict `{ clientMessageId` (uuid), `question` (1–500 characters) } | `200` `text/event-stream` (SSE), see below                                                                                       | Refused as JSON before the stream: 400; 401; 403 `FORBIDDEN_ORIGIN`; 404; 409 `AI_OFF_FOR_SESSION`, `AI_BUDGET_EXHAUSTED`, `CHAT_BUSY`, `DUPLICATE_MESSAGE`; 429; 503 `AI_DISABLED` |
+
+- **Stream:** events are `start`, `delta` (text), `tool` (tool name only), `done` (sources) and `error` (fixed text, no provider detail). Once the stream has started the HTTP status is already 200, so a later failure is an `error` event and the stored answer is `INCOMPLETE`. Responses are not compressed and carry `X-Accel-Buffering: no`. Closing the connection aborts the model call.
+- **Sources:** the server sets them from tool results. Citations written by the model are ignored. `done` carries the sources for that answer.
+- **Chat turns:** each turn has the question, the answer, a `status` (`INCOMPLETE` when cut short), an error code when set, and its sources.
+- **Limits:** one streaming answer per session at a time (`CHAT_BUSY`); each question reserves tokens from the session AI budget.
+- **Privacy:** the report, the export and the chat carry no participant identifiers or display names.
 
 ### AI — features [11–14]
 
@@ -136,6 +223,18 @@ and `ai:job-failed` (presenter room only, see `05-realtime-events.md`).
 | POST   | `/sessions/:id/ai/ask`              | P   | `{ question }` → streamed answer (SSE `text/event-stream`: `token`, `citations`, `done`, `error`) |
 | GET    | `/sessions/:id/ai/usage`            | P   | Tokens used / budget, jobs by status                                                              |
 | GET    | `/ai/jobs/:id`                      | P   | Job status (must belong to presenter's session)                                                   |
+
+### AI actions — MCP proposals [15] (built)
+
+Presenter cookie on `:id`. Mounted only when AI is enabled. Common errors: 401 `PRESENTER_AUTH_REQUIRED`; 403
+`FORBIDDEN_ORIGIN` (foreign Origin).
+
+| Method | Path                                         | Who | Notes                                                                                                                                                                                                              |
+| ------ | -------------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/sessions/:id/ai/actions`                   | P   | Body `{ type, ... }`: `CREATE_POLL` (poll body), `START_POLL` / `CLOSE_POLL` `{ pollId }`, `PUBLISH_ANSWER` `{ questionId, text }`. `201 AiActionDto` (`PROPOSED`). 400, 404, 409 `SESSION_ENDED` / `AI_OFF_FOR_SESSION` / `PROPOSAL_LIMIT_REACHED`, 429, 503 `AI_DISABLED`. Used by MCP. |
+| GET    | `/sessions/:id/ai/actions`                   | P   | `200 { actions }`, newest first, max 50. 404.                                                                                                                                                                      |
+| POST   | `/sessions/:id/ai/actions/:actionId/approve` | P   | Web only. `200 { action }`: `EXECUTED` or `FAILED` with `errorCode` (a failed run is not an HTTP error). 404, 409 `ACTION_NOT_PROPOSED` / `SESSION_ENDED` / `AI_OFF_FOR_SESSION`, 429, 503.                            |
+| POST   | `/sessions/:id/ai/actions/:actionId/reject`  | P   | Web only. `200 { action }` with `REJECTED`. 404, 409 `ACTION_NOT_PROPOSED`, 429.                                                                                                                                   |
 
 ### Ops
 

@@ -35,6 +35,9 @@ export const AI_ERROR_CODES = [
   'RUNNER_INTERRUPTED',
   'BUDGET_EXCEEDED',
   'CANCELLED',
+  'DOCUMENT_REMOVED',
+  'CHAT_BUSY',
+  'DUPLICATE_MESSAGE',
   'INTERNAL',
 ] as const
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number]
@@ -54,6 +57,9 @@ export const AI_ERROR_MESSAGES: Record<AiErrorCode, string> = {
   RUNNER_INTERRUPTED: 'The task was interrupted by a server restart.',
   BUDGET_EXCEEDED: 'The task stopped because it would exceed the AI allowance.',
   CANCELLED: 'The task was cancelled.',
+  DOCUMENT_REMOVED: 'The document was removed before it was processed.',
+  CHAT_BUSY: 'An answer is already being written. Wait for it to finish.',
+  DUPLICATE_MESSAGE: 'This question was already sent.',
   INTERNAL: 'Something went wrong. Please try again.',
 }
 

@@ -8,6 +8,7 @@ function replying(text: string): LlmProvider {
     name: 'fake',
     model: 'fake-1',
     complete: () => Promise.resolve({ text, inputTokens: 1, outputTokens: 2, model: 'fake-1' }),
+    converse: createFakeProvider().converse,
   }
 }
 
@@ -37,8 +38,8 @@ describe('diagnostic task', () => {
     )
   })
 
-  it('only the diagnostic task type is registered', () => {
-    expect([...taskRegistry.keys()]).toEqual(['PING'])
-    expect(() => getTask('SUGGEST_POLLS')).toThrow()
+  it('only the diagnostic, document import, poll suggestion and Q&A copilot task types are registered', () => {
+    expect([...taskRegistry.keys()]).toEqual(['PING', 'INGEST_DOCUMENT', 'SUGGEST_POLLS', 'QNA_COPILOT'])
+    expect(() => getTask('LIVE_INSIGHTS')).toThrow()
   })
 })

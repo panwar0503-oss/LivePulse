@@ -87,9 +87,17 @@ const safeError = (code: string | null): { errorCode: AiErrorCode; message: stri
 
 export type EnqueuedJob = { id: string; status: AiJobStatus; type: AiTaskType; created: boolean }
 
+/** An existing job returned instead of inserting a new one. */
+export type EnqueueShortcut = Omit<EnqueuedJob, 'created'> & { created: false }
+
+/**
+ * `beforeInsert` runs inside the enqueue transaction, under the session FOR SHARE lock, after the switch, session
+ * and budget checks. Returning a job skips the insert and returns it; throwing rolls the enqueue back.
+ */
 export async function enqueueAiJob(
   deps: AiJobsDeps,
   input: { sessionId: string; type: AiTaskType; input: Record<string, unknown>; dedupeKey: string | null },
+  beforeInsert?: (transaction: Transaction) => Promise<EnqueueShortcut | undefined>,
 ): Promise<EnqueuedJob> {
   const task = getTask(input.type)
   const job = await deps.sequelize.transaction(async (transaction): Promise<EnqueuedJob> => {
@@ -107,39 +115,72 @@ export async function enqueueAiJob(
     if (session.aiTokensUsed + reserved + task.reserveTokens > session.aiTokenBudget) {
       throw refused(409, 'AI_BUDGET_EXHAUSTED')
     }
-    // The partial unique index is the final guard against a double enqueue.
-    const inserted = await deps.sequelize.query<{ id: string; status: AiJobStatus }>(
-      'INSERT INTO ai_jobs (id, session_id, type, status, max_attempts, input, dedupe_key, created_at, updated_at) ' +
-        "VALUES (gen_random_uuid(), :sessionId, :type, 'PENDING', :maxAttempts, CAST(:input AS jsonb), :dedupeKey, " +
-        'clock_timestamp(), clock_timestamp()) ' +
-        'ON CONFLICT (session_id, dedupe_key) ' +
-        "WHERE dedupe_key IS NOT NULL AND status IN ('PENDING','RUNNING') DO NOTHING RETURNING id, status",
-      {
-        replacements: {
-          sessionId: input.sessionId,
-          type: input.type,
-          maxAttempts: deps.env.AI_MAX_ATTEMPTS,
-          input: JSON.stringify(input.input),
-          dedupeKey: input.dedupeKey,
-        },
-        type: QueryTypes.SELECT,
-        transaction,
-      },
-    )
-    const row = inserted[0]
-    if (row) return { id: row.id, status: row.status, type: input.type, created: true }
-    // Conflict: the winning job committed before DO NOTHING returned, so this statement sees it.
-    const existing = await deps.models.AiJob.findOne({
-      where: { sessionId: input.sessionId, dedupeKey: input.dedupeKey },
-      attributes: ['id', 'status', 'type'],
-      order: [['createdAt', 'DESC']],
-      transaction,
-    })
-    if (!existing) throw new Error('AI job dedupe conflict without an existing job')
-    return { id: existing.id, status: existing.status, type: existing.type, created: false }
+    const shortcut = await beforeInsert?.(transaction)
+    if (shortcut) return shortcut
+    const { job, created } = await insertAiJobInTx(transaction, deps, input)
+    return { ...job, created }
   })
   deps.nudge?.()
   return job
+}
+
+/**
+ * The enqueue checks as a yes/no, for callers that fall back instead of refusing (a question goes VISIBLE when
+ * AI cannot run). The caller must hold the session FOR SHARE in `transaction`, as enqueueAiJob does.
+ */
+export async function isAiUsableInTx(
+  sequelize: Sequelize,
+  transaction: Transaction,
+  session: { id: string; status: string; aiEnabled: boolean; aiTokensUsed: number; aiTokenBudget: number },
+  reserveTokens: number,
+): Promise<boolean> {
+  if (!getGlobalAiEnabled() || session.status === 'ENDED' || !session.aiEnabled) return false
+  const reserved = await reservedTokens(sequelize, session.id, transaction)
+  return session.aiTokensUsed + reserved + reserveTokens <= session.aiTokenBudget
+}
+
+export type InsertedAiJob = { job: { id: string; status: AiJobStatus; type: AiTaskType }; created: boolean }
+
+/**
+ * Inserts a PENDING job inside the caller's transaction, deduplicated on (session, dedupeKey) while a job with
+ * that key is PENDING or RUNNING. The caller must already hold the session lock and have made its own checks
+ * (switches, session state, budget); nothing is checked here. The caller nudges the runner after commit.
+ */
+export async function insertAiJobInTx(
+  transaction: Transaction,
+  deps: { sequelize: Sequelize; models: Pick<Models, 'AiJob'>; env: Pick<Env, 'AI_MAX_ATTEMPTS'> },
+  input: { sessionId: string; type: AiTaskType; input: Record<string, unknown>; dedupeKey: string | null },
+): Promise<InsertedAiJob> {
+  // The partial unique index is the final guard against a double enqueue.
+  const inserted = await deps.sequelize.query<{ id: string; status: AiJobStatus }>(
+    'INSERT INTO ai_jobs (id, session_id, type, status, max_attempts, input, dedupe_key, created_at, updated_at) ' +
+      "VALUES (gen_random_uuid(), :sessionId, :type, 'PENDING', :maxAttempts, CAST(:input AS jsonb), :dedupeKey, " +
+      'clock_timestamp(), clock_timestamp()) ' +
+      'ON CONFLICT (session_id, dedupe_key) ' +
+      "WHERE dedupe_key IS NOT NULL AND status IN ('PENDING','RUNNING') DO NOTHING RETURNING id, status",
+    {
+      replacements: {
+        sessionId: input.sessionId,
+        type: input.type,
+        maxAttempts: deps.env.AI_MAX_ATTEMPTS,
+        input: JSON.stringify(input.input),
+        dedupeKey: input.dedupeKey,
+      },
+      type: QueryTypes.SELECT,
+      transaction,
+    },
+  )
+  const row = inserted[0]
+  if (row) return { job: { id: row.id, status: row.status, type: input.type }, created: true }
+  // Conflict: the winning job committed before DO NOTHING returned, so this statement sees it.
+  const existing = await deps.models.AiJob.findOne({
+    where: { sessionId: input.sessionId, dedupeKey: input.dedupeKey },
+    attributes: ['id', 'status', 'type'],
+    order: [['createdAt', 'DESC']],
+    transaction,
+  })
+  if (!existing) throw new Error('AI job dedupe conflict without an existing job')
+  return { job: { id: existing.id, status: existing.status, type: existing.type }, created: false }
 }
 
 /** Cancels the session's waiting jobs. Runs inside the caller's transaction, after its session lock. */

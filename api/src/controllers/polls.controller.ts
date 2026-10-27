@@ -10,14 +10,12 @@ import type { Models } from '../models/index.js'
 import type { Realtime } from '../realtime/index.js'
 import { getParticipantMe } from '../services/participants.service.js'
 import {
-  closePoll,
-  createPoll,
   getCurrentPollForParticipant,
   listPresenterPolls,
   loadPollWithSession,
   setShowResults,
-  startPoll,
 } from '../services/polls.service.js'
+import { runClosePoll, runCreatePoll, runStartPoll } from '../services/presenter-commands.js'
 import { findSessionByCode, getPresenterSession } from '../services/sessions.service.js'
 import { castVote } from '../services/votes.service.js'
 
@@ -63,7 +61,7 @@ export const createPollsController = (deps: PollsControllerDeps): PollsControlle
   const create: RequestHandler = async (req, res) => {
     const sessionId = param(req, 'id')
     await requirePresenter(req, sessionId)
-    const data = await createPoll(deps, sessionId, req.body as CreatePollBody)
+    const data = await runCreatePoll(deps, { sessionId, body: req.body as CreatePollBody })
     res.status(201).json({ success: true, data })
   }
 
@@ -75,21 +73,13 @@ export const createPollsController = (deps: PollsControllerDeps): PollsControlle
 
   const start: RequestHandler = async (req, res) => {
     const { pollId, sessionId } = await authorizePollOwner(req)
-    const data = await startPoll(deps, pollId)
-    await afterCommit('poll started emit failed', () => deps.realtime.polls.emitPollStarted(sessionId, data))
+    const data = await runStartPoll(deps, { sessionId, pollId })
     res.json({ success: true, data })
   }
 
   const close: RequestHandler = async (req, res) => {
     const { pollId, sessionId } = await authorizePollOwner(req)
-    const { poll, closed } = await closePoll(deps, pollId)
-    if (closed && poll.closedAt) {
-      const closedAt = new Date(poll.closedAt)
-      await afterCommit('poll closed emit failed', async () => {
-        await deps.realtime.polls.emitResultsNow(sessionId, pollId)
-        deps.realtime.polls.emitPollClosed(sessionId, pollId, closedAt)
-      })
-    }
+    const poll = await runClosePoll(deps, { sessionId, pollId })
     res.json({ success: true, data: poll })
   }
 

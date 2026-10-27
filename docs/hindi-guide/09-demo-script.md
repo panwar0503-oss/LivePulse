@@ -77,7 +77,7 @@ Incognito और दूसरा browser इसलिए, क्योंकि 
 उसका केवल SHA-256 hash रखा है, इसलिए हम खुद भी इसे दोबारा नहीं दिखा सकते।"
 
 ### Step 2.2 — Presenter key का महत्व
-1. Dashboard खोलें (`/presenter/<sessionId>`): title, status, code, join link, joined count = 0।
+1. Dashboard खोलें (`/host/<sessionId>`): title, status, code, join link, joined count = 0।
 2. यही URL Browser C (दूसरा browser) में खोलें → presenter key माँगेगा।
 3. गलत key डालें → साफ़ error, और कुछ नहीं बताता।
 4. सही key डालें → dashboard खुल जाता है।

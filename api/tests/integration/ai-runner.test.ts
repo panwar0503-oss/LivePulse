@@ -26,6 +26,7 @@ const validReplies = (fake: Fake, before?: () => Promise<void>): LlmProvider => 
     await before?.()
     return { ...reply, text: '{"ok": true}' }
   },
+  converse: fake.converse,
 })
 
 // Holds every call until released, so a test can act while a run is in progress.
@@ -47,6 +48,7 @@ const held = (inner: LlmProvider): { provider: LlmProvider; entered: Promise<voi
         await gate
         return inner.complete(input)
       },
+      converse: inner.converse,
     },
     entered,
     release,

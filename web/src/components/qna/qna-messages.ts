@@ -8,6 +8,10 @@ const MESSAGES: Record<string, string> = {
   OWN_QUESTION: 'You cannot upvote your own question.',
   QUESTION_HIDDEN: 'That question is no longer available.',
   QUESTION_PIN_CONFLICT: 'Another question was pinned at the same moment. Check the list and try again.',
+  DRAFT_NOT_PENDING: 'This draft was already handled.',
+  QUESTION_ALREADY_ANSWERED: 'This question was already answered.',
+  QUESTION_NOT_VISIBLE: 'This question is no longer visible.',
+  QUESTION_NOT_HELD: 'This question was already handled.',
   PARTICIPANT_AUTH_REQUIRED: 'Join the session again to ask or upvote.',
 }
 

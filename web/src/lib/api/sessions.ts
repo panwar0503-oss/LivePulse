@@ -60,15 +60,22 @@ const extractFields = (details: unknown): Record<string, string> | undefined => 
 export const request = async <T extends z.ZodType>(
   path: string,
   schema: T | null,
-  init: { method: 'GET' | 'POST' | 'PATCH'; body?: unknown },
+  init: {
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+    body?: unknown
+    // Raw bytes (file upload): sent as-is with their own content type instead of JSON.
+    raw?: { body: Blob; contentType: string; headers?: Record<string, string> }
+  },
 ): Promise<ApiResult<z.infer<T>>> => {
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       method: init.method,
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      headers: init.raw
+        ? { 'Content-Type': init.raw.contentType, Accept: 'application/json', ...init.raw.headers }
+        : { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: init.raw ? init.raw.body : init.body === undefined ? undefined : JSON.stringify(init.body),
     })
   } catch {
     // The cause (URL, headers) is deliberately not logged; the UI gets a plain message.

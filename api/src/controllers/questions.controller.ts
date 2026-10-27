@@ -8,19 +8,22 @@ import { participantCookieName, parseCookies, presenterCookieName } from '../lib
 import { hashToken } from '../lib/tokens.js'
 import type { Models } from '../models/index.js'
 import type { Realtime } from '../realtime/index.js'
+import { runModerateQuestion } from '../services/presenter-commands.js'
 import { upvoteQuestion } from '../services/question-upvotes.service.js'
 import {
   listParticipantQuestions,
   listPresenterQuestions,
   loadQuestionWithSession,
-  moderateQuestion,
   submitQuestion,
+  type QuestionsDeps,
 } from '../services/questions.service.js'
 import { findSessionByCode, getPresenterSession } from '../services/sessions.service.js'
 
 export type QuestionsControllerDeps = {
   sequelize: Sequelize
   models: Models
+  /** Absent: new questions skip the AI check and are visible at once. */
+  ai?: QuestionsDeps['ai']
   realtime: { questions: Omit<Realtime['questions'], 'clearQuestionTimers'> }
   logger: Logger
 }
@@ -73,10 +76,13 @@ export const createQuestionsController = (deps: QuestionsControllerDeps): Questi
     const { sessionId, participantId } = res.locals.asker as { sessionId: string; participantId: string }
     const { text } = req.body as SubmitQuestionBody
     const question = await submitQuestion(deps, { sessionId, participantId, text })
-    // A new question has no upvotes, so only the created event is sent.
-    await afterCommit('question created emit failed', () =>
-      questions.emitQuestionCreated(sessionId, question.id),
-    )
+    // A new question has no upvotes, so only the created event is sent. A question waiting for its AI check is
+    // not sent to the room at all: the event carries its text.
+    if (question.status !== 'CHECKING') {
+      await afterCommit('question created emit failed', () =>
+        questions.emitQuestionCreated(sessionId, question.id),
+      )
+    }
     res.status(201).json({ success: true, data: { question } })
   }
 
@@ -115,16 +121,11 @@ export const createQuestionsController = (deps: QuestionsControllerDeps): Questi
   const moderate: RequestHandler = async (req, res) => {
     const { question: row, sessionId } = await loadQuestionWithSession(deps, param(req, 'id'))
     await requirePresenter(req, sessionId)
-    const { question, changed } = await moderateQuestion(deps, row.id, req.body as PatchQuestionBody)
-    if (changed.visibility || changed.pin || changed.answer) {
-      await afterCommit('question updated emit failed', () =>
-        questions.emitQuestionUpdated(sessionId, row.id),
-      )
-    }
-    // The upvote list is read fresh at send time, so a hide or restore is reflected in it.
-    if (changed.visibility) {
-      await afterCommit('question upvotes emit failed', () => questions.scheduleUpvotes(sessionId))
-    }
+    const question = await runModerateQuestion(deps, {
+      sessionId,
+      questionId: row.id,
+      patch: req.body as PatchQuestionBody,
+    })
     res.json({ success: true, data: question })
   }
 

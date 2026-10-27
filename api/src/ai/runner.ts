@@ -23,13 +23,12 @@ import type { AiJobStatus, Models } from '../models/index.js'
 import { getGlobalAiEnabled } from '../services/ai-jobs.service.js'
 import { AiProviderError, type LlmProvider } from './providers/llm-provider.js'
 import { mapProviderError } from './providers/provider-errors.js'
-import { taskRegistry, type AiTask } from './tasks/registry.js'
+import { DEFAULT_TASK_TIMEOUT_MS, taskRegistry, type AiTask, type AiTaskDeps } from './tasks/registry.js'
 
 const POLL_INTERVAL_MS = 1000
 const RECOVERY_INTERVAL_MS = 60_000
-// Far longer than PROVIDER_TIMEOUT_MS, so only a run whose server died (or hung past its timeout) is stale.
+// Far longer than any task timeout, so only a run whose server died (or hung past its timeout) is stale.
 const STALE_AFTER_SECONDS = 5 * 60
-const PROVIDER_TIMEOUT_MS = 60_000
 const STOP_WAIT_MS = 10_000
 const BACKOFF_BASE_SECONDS = 2
 const BACKOFF_CAP_SECONDS = 30
@@ -51,8 +50,24 @@ export type AiRunnerDeps = {
   env: Pick<Env, 'AI_MAX_CONCURRENCY' | 'AI_MAX_ATTEMPTS' | 'AI_SESSION_TOKEN_BUDGET'>
   logger: Logger
   emit?: (event: AiRunnerEvent) => void
+  /** Non-LLM services handed to every task run (extractor, embeddings, reranker). Defaults to none. */
+  taskDeps?: AiTaskDeps
   /** Reference clock for run_after and staleness; defaults to the database clock. */
   now?: () => Date
+  /**
+   * Called inside the same transaction (session locked FOR UPDATE, job row updated) whenever a job ends FAILED
+   * or SKIPPED: at claim, at settle, or at stale recovery. A throw rolls that transaction back.
+   */
+  onGiveUp?: (transaction: Transaction, job: GiveUpJob) => Promise<void>
+}
+
+export type GiveUpJob = {
+  id: string
+  sessionId: string
+  type: AiTaskType
+  input: unknown
+  status: 'FAILED' | 'SKIPPED'
+  errorCode: AiErrorCode | null
 }
 
 export type AiRunner = {
@@ -94,6 +109,9 @@ type JobRow = {
   due: boolean
   stale: boolean
 }
+
+const inputNamesOtherSession = (input: unknown, sessionId: string): boolean =>
+  typeof input === 'object' && input !== null && 'sessionId' in input && input.sessionId !== sessionId
 
 export function createAiRunner(deps: AiRunnerDeps): AiRunner {
   const { sequelize, models, provider, logger } = deps
@@ -179,11 +197,21 @@ export function createAiRunner(deps: AiRunnerDeps): AiRunner {
       const base = { sessionId, jobId: candidate.id, type: row.type }
       const end = async (status: 'SKIPPED' | 'FAILED', errorCode: AiErrorCode): Promise<ClaimResult> => {
         await finishJob(candidate.id, status, errorCode, transaction)
+        await deps.onGiveUp?.(transaction, {
+          id: candidate.id,
+          sessionId,
+          type: row.type,
+          input: row.input,
+          status,
+          errorCode,
+        })
         const usage = await usageOf(sessionId, transaction)
         return { kind: 'done', event: { ...base, status, errorCode, usage } }
       }
       // Unregistered type, or a PENDING row with no attempts left: never reaches the provider.
       if (!task || row.attempts >= row.max_attempts) return end('FAILED', 'INTERNAL')
+      // A task that reads its session from the input may only ever see the job's own session.
+      if (inputNamesOtherSession(row.input, sessionId)) return end('FAILED', 'INTERNAL')
       const offCode = switchedOff(session, task)
       if (offCode) return end('SKIPPED', offCode)
       const before = await usageOf(sessionId, transaction)
@@ -219,7 +247,9 @@ export function createAiRunner(deps: AiRunnerDeps): AiRunner {
       const result = await job.task.run({
         provider,
         input: parsed.data,
-        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+        signal: AbortSignal.timeout(job.task.timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS),
+        deps: deps.taskDeps,
+        jobId: job.id,
       })
       return { kind: 'ok', ...result, model: provider.model, latencyMs: Date.now() - started }
     } catch (err) {
@@ -291,6 +321,10 @@ export function createAiRunner(deps: AiRunnerDeps): AiRunner {
         logger.warn({ jobId: job.id, attempt: job.attempts }, 'ai job settle skipped: run no longer current')
         return null
       }
+      if (status === 'FAILED' || status === 'SKIPPED') {
+        const ended = { id: job.id, sessionId: job.sessionId, type: job.type, input: job.input }
+        await deps.onGiveUp?.(transaction, { ...ended, status, errorCode })
+      }
       const usage = await usageOf(job.sessionId, transaction)
       return { sessionId: job.sessionId, jobId: job.id, type: job.type, status, errorCode, usage }
     })
@@ -334,6 +368,14 @@ export function createAiRunner(deps: AiRunnerDeps): AiRunner {
           )
         } else {
           await finishJob(candidate.id, 'FAILED', 'RUNNER_INTERRUPTED', transaction)
+          await deps.onGiveUp?.(transaction, {
+            id: candidate.id,
+            sessionId: candidate.session_id,
+            type: row.type,
+            input: row.input,
+            status: 'FAILED',
+            errorCode: 'RUNNER_INTERRUPTED',
+          })
         }
         const usage = await usageOf(candidate.session_id, transaction)
         const status: AiJobStatus = retry ? 'PENDING' : 'FAILED'

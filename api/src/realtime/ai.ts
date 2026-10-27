@@ -1,5 +1,5 @@
 import { AI_ERROR_CODES, AI_ERROR_MESSAGES, AI_TASK_NAMES } from '@livepulse/shared'
-import type { AiErrorCode, AiTaskType } from '@livepulse/shared'
+import type { AiActionUpdated, AiErrorCode, AiTaskType, PollSuggestionsReady } from '@livepulse/shared'
 import type { Logger } from 'pino'
 import type { AiRunnerEvent } from '../ai/runner.js'
 import { describeError } from '../db/redis.js'
@@ -25,7 +25,14 @@ export type AiEmitters = {
   emitAiStatus: (sessionId: string, enabled: boolean, globalEnabled: boolean) => void
   emitAiUsage: (sessionId: string, usage: AiUsageValues) => void
   emitAiJobFailed: (failure: AiJobFailure) => void
-  /** Runner emit hook: FAILED → failure + usage, SUCCEEDED → usage; every other status sends nothing. */
+  /** Presenter room only; ids and status, never suggestion text. Also used when a request is created. */
+  emitPollSuggestionsReady: (notice: PollSuggestionsReady) => void
+  /** Presenter room only; ids and enums, never action details. Call after each proposal transition commits. */
+  emitAiActionUpdated: (sessionId: string, update: Omit<AiActionUpdated, 'sessionId'>) => void
+  /**
+   * Runner emit hook: FAILED → failure + usage, SUCCEEDED → usage; every other status sends nothing.
+   * A SUGGEST_POLLS job that finishes (SUCCEEDED, FAILED, SKIPPED) also sends poll-suggestions:ready.
+   */
   onRunnerEvent: (event: AiRunnerEvent) => void
   /** Service emit hook for the session and global switches: status + usage. */
   onAiStateChanged: (notice: AiStateNotice) => void
@@ -70,11 +77,29 @@ export const createAiEmitters = ({ io, logger }: AiEmittersDeps): AiEmitters => 
       })
     })
 
+  const emitPollSuggestionsReady: AiEmitters['emitPollSuggestionsReady'] = ({ sessionId, jobId, status }) =>
+    emitSafely(sessionId, 'poll suggestions ready emit failed', () => {
+      io.to(presenterRoom(sessionId)).emit('poll-suggestions:ready', { sessionId, jobId, status })
+    })
+
+  const emitAiActionUpdated: AiEmitters['emitAiActionUpdated'] = (sessionId, { actionId, type, status }) =>
+    emitSafely(sessionId, 'ai action updated emit failed', () => {
+      io.to(presenterRoom(sessionId)).emit('ai-action:updated', { sessionId, actionId, type, status })
+    })
+
   return {
     emitAiStatus,
     emitAiUsage,
     emitAiJobFailed,
+    emitPollSuggestionsReady,
+    emitAiActionUpdated,
     onRunnerEvent: (event) => {
+      if (
+        event.type === 'SUGGEST_POLLS' &&
+        (event.status === 'SUCCEEDED' || event.status === 'FAILED' || event.status === 'SKIPPED')
+      ) {
+        emitPollSuggestionsReady({ sessionId: event.sessionId, jobId: event.jobId, status: event.status })
+      }
       if (event.status === 'FAILED') {
         emitAiJobFailed({
           sessionId: event.sessionId,

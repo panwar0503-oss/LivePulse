@@ -6,27 +6,31 @@ features के लिए मुख्य संदर्भ है।
 
 ## किस क्रम में पढ़ें
 
-| क्रम | फ़ाइल | इसमें क्या है |
-|---|---|---|
-| 1 | [01-project-overview.md](01-project-overview.md) | प्रोजेक्ट क्या है, किसके लिए है, अभी तक क्या बना |
-| 2 | [02-architecture.md](02-architecture.md) | तीन हिस्से, request का पूरा सफ़र, सुरक्षा की परतें |
-| 3 | [03-claude-workflow.md](03-claude-workflow.md) | Claude Code कैसे सेट है: CLAUDE.md, commands, agents, skills, hooks |
-| 4 | [04-stages/README.md](04-stages/README.md) | सभी stages की सूची और हर stage का status |
-| 5 | [04-stages/stage-01-foundation.md](04-stages/stage-01-foundation.md) | Stage 1: project का ढाँचा, Docker, health checks |
-| 6 | [04-stages/stage-02-sessions-and-join.md](04-stages/stage-02-sessions-and-join.md) | Stage 2: session बनाना और join करना |
-| 6a | [04-stages/stage-03-realtime-backbone.md](04-stages/stage-03-realtime-backbone.md) | Stage 3: live connection, presence, session end |
-| 6b | [04-stages/stage-04-live-polls.md](04-stages/stage-04-live-polls.md) | Stage 4: live polls, एक vote, results switch |
-| 6c | [04-stages/stage-05-word-cloud.md](04-stages/stage-05-word-cloud.md) | Stage 5: word cloud, एक शब्द, normalisation, show/hide |
-| 6d | [04-stages/stage-06-live-qna.md](04-stages/stage-06-live-qna.md) | Stage 6: live Q&A, upvotes, pin/hide/answer, pause |
-| 6e | [04-stages/stage-07-ai-foundation.md](04-stages/stage-07-ai-foundation.md) | Stage 7: AI foundation, job queue, budget, presenter-only AI events |
-| 7 | [05-code/](05-code/) | हर फ़ाइल का code, line by line, हिंदी में |
-| 8 | [06-how-to-add-next-stage.md](06-how-to-add-next-stage.md) | अगला feature कैसे जोड़ें (step by step) |
-| 9 | [07-decisions.md](07-decisions.md) | हर बड़ा फ़ैसला: क्या, क्यों, trade-off |
-| 10 | [08-verification-log.md](08-verification-log.md) | क्या जाँचा, असली commands और नतीजे |
-| 11 | [09-demo-script.md](09-demo-script.md) | CTO demo का plan, talk track और fallback |
-| 12 | [10-glossary.md](10-glossary.md) | शब्दावली (हिंदी अर्थ के साथ) |
-| 13 | [11-known-issues.md](11-known-issues.md) | खुले issues, risks और जो अभी जाँचा नहीं गया |
-| 14 | [12-cto-qa.md](12-cto-qa.md) | CTO के संभावित सवाल और जवाब |
+| क्रम | फ़ाइल                                                                                | इसमें क्या है                                                                  |
+| ---- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| 1    | [01-project-overview.md](01-project-overview.md)                                     | प्रोजेक्ट क्या है, किसके लिए है, अभी तक क्या बना                               |
+| 2    | [02-architecture.md](02-architecture.md)                                             | तीन हिस्से, request का पूरा सफ़र, सुरक्षा की परतें                             |
+| 3    | [03-claude-workflow.md](03-claude-workflow.md)                                       | Claude Code कैसे सेट है: CLAUDE.md, commands, agents, skills, hooks            |
+| 4    | [04-stages/README.md](04-stages/README.md)                                           | सभी stages की सूची और हर stage का status                                       |
+| 5    | [04-stages/stage-01-foundation.md](04-stages/stage-01-foundation.md)                 | Stage 1: project का ढाँचा, Docker, health checks                               |
+| 6    | [04-stages/stage-02-sessions-and-join.md](04-stages/stage-02-sessions-and-join.md)   | Stage 2: session बनाना और join करना                                            |
+| 6a   | [04-stages/stage-03-realtime-backbone.md](04-stages/stage-03-realtime-backbone.md)   | Stage 3: live connection, presence, session end                                |
+| 6b   | [04-stages/stage-04-live-polls.md](04-stages/stage-04-live-polls.md)                 | Stage 4: live polls, एक vote, results switch                                   |
+| 6c   | [04-stages/stage-05-word-cloud.md](04-stages/stage-05-word-cloud.md)                 | Stage 5: word cloud, एक शब्द, normalisation, show/hide                         |
+| 6d   | [04-stages/stage-06-live-qna.md](04-stages/stage-06-live-qna.md)                     | Stage 6: live Q&A, upvotes, pin/hide/answer, pause                             |
+| 6e   | [04-stages/stage-07-ai-foundation.md](04-stages/stage-07-ai-foundation.md)           | Stage 7: AI foundation, job queue, budget, presenter-only AI events            |
+| 6f   | [04-stages/stage-08-knowledge-base-rag.md](04-stages/stage-08-knowledge-base-rag.md) | Stage 8: knowledge base, PDF/text upload, hybrid search, reranker              |
+| 6g   | [04-stages/stage-09-ai-poll-generator.md](04-stages/stage-09-ai-poll-generator.md)   | Stage 9: AI poll suggestions, passage के साथ, presenter ही poll बनाता है       |
+| 6h   | [04-stages/stage-10-ai-qna-copilot.md](04-stages/stage-10-ai-qna-copilot.md)         | Stage 10: AI Q&A copilot, moderation, duplicate, citations, presenter approval |
+| 6i   | [04-stages/stage-11-ai-session-report.md](04-stages/stage-11-ai-session-report.md)   | Stage 11: post-session report, "Ask your session" chat, streamed with sources  |
+| 7    | [05-code/](05-code/)                                                                 | हर फ़ाइल का code, line by line, हिंदी में                                      |
+| 8    | [06-how-to-add-next-stage.md](06-how-to-add-next-stage.md)                           | अगला feature कैसे जोड़ें (step by step)                                        |
+| 9    | [07-decisions.md](07-decisions.md)                                                   | हर बड़ा फ़ैसला: क्या, क्यों, trade-off                                         |
+| 10   | [08-verification-log.md](08-verification-log.md)                                     | क्या जाँचा, असली commands और नतीजे                                             |
+| 11   | [09-demo-script.md](09-demo-script.md)                                               | CTO demo का plan, talk track और fallback                                       |
+| 12   | [10-glossary.md](10-glossary.md)                                                     | शब्दावली (हिंदी अर्थ के साथ)                                                   |
+| 13   | [11-known-issues.md](11-known-issues.md)                                             | खुले issues, risks और जो अभी जाँचा नहीं गया                                    |
+| 14   | [12-cto-qa.md](12-cto-qa.md)                                                         | CTO के संभावित सवाल और जवाब                                                    |
 
 ## code walkthrough (`05-code/`)
 
@@ -45,6 +49,7 @@ features के लिए मुख्य संदर्भ है।
 ## इस फ़ोल्डर को अपडेट कैसे रखें
 
 हर नया stage पूरा होने पर ये फ़ाइलें अपडेट होनी चाहिए:
+
 1. `04-stages/README.md` में stage का status बदलें।
 2. नया `04-stages/stage-NN-<name>.md` लिखें (ढाँचा `04-stages/README.md` में है)।
 3. नए/बदले files के लिए `05-code/` में walkthrough जोड़ें या बदलें।
@@ -54,7 +59,7 @@ features के लिए मुख्य संदर्भ है।
 
 पूरी प्रक्रिया [06-how-to-add-next-stage.md](06-how-to-add-next-stage.md) में है।
 
-## अभी की स्थिति (2026-10-24)
+## अभी की स्थिति (2026-10-25)
 
 - Stage 1 (foundation): पूरा, verified (commit `f382ca2`)।
 - Stage 2 (sessions-and-join): पूरा, verified (commit `1f6937f`)।
@@ -67,6 +72,9 @@ features के लिए मुख्य संदर्भ है।
 - Stage 6 (live-qna): पूरा, verified (integration 311 pass + 1 skipped, live e2e 28/28); commit अभी बाकी है।
   Skipped test word-cloud का race test है (intermittent failure; developer के निर्देश पर skip; वजह पक्की होने पर
   फिर चालू करना है)। विवरण: [04-stages/stage-06-live-qna.md](04-stages/stage-06-live-qna.md)।
+- Stage 8 (knowledge-base-rag): API और web के targeted checks पास (typecheck, unit, integration, web tests); live PDF और
+  reranker checks, real browser और असली upload NOT RUN; commit अभी बाकी है।
+  विवरण: [04-stages/stage-08-knowledge-base-rag.md](04-stages/stage-08-knowledge-base-rag.md)।
 - अगला कदम: Stage 3–6 का commit, skipped race test को ठीक करके फिर चालू करना, browser में polls, word cloud और Q&A
   की जाँच; अगला stage (roadmap में reactions, फिर AI) आपकी approval के बाद ही।
 

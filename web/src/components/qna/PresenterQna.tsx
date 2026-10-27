@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import type { PatchQuestionBody } from '@livepulse/shared'
 import { usePresenterQuestions } from '../../hooks/use-presenter-questions'
+import { useQnaCopilot } from '../../hooks/use-qna-copilot'
+import { ClustersPanel } from './ClustersPanel'
+import { CopilotReview } from './CopilotReview'
 import { moderateQuestion, setQnaOpen } from '../../lib/api/questions'
 import { qnaErrorMessage } from './qna-messages'
 import { QnaPanel } from './QnaPanel'
@@ -40,23 +43,41 @@ export function PresenterQna({ sessionId }: PresenterQnaProps) {
     refresh()
   }
 
+  const copilot = useQnaCopilot(sessionId)
+  const questionTexts = new Map(questions.map((q) => [q.id, q.text]))
+
   return (
-    <QnaPanel
-      questions={questions}
-      qnaOpen={qnaOpen}
-      status={status}
-      loadError={error?.message}
-      onRetry={refresh}
-      switchPending={switchPending}
-      onToggleQna={(open) => void toggle(open)}
-      busyQuestionId={busyId}
-      actionError={actionError}
-      answerErrorFor={answerError}
-      onPin={(id, pinned) => void act(id, { pinned })}
-      onHide={(id, hidden) => void act(id, { hidden })}
-      onAnswered={(id, answered) => void act(id, { answered })}
-      onSaveAnswer={(id, text) => void act(id, { answerText: text }, true)}
-      onClearAnswer={(id) => void act(id, { answerText: null }, true)}
-    />
+    <div className="flex flex-col gap-6">
+      <CopilotReview
+        status={copilot.status}
+        held={copilot.review.held}
+        drafts={copilot.review.drafts}
+        error={copilot.error}
+        busyId={copilot.busyId}
+        onApprove={copilot.approve}
+        onReject={copilot.reject}
+        onRelease={copilot.release}
+        onRejectHeld={copilot.rejectHeld}
+        onRetry={copilot.retry}
+      />
+      <ClustersPanel clusters={copilot.clusters} questionTexts={questionTexts} />
+      <QnaPanel
+        questions={questions}
+        qnaOpen={qnaOpen}
+        status={status}
+        loadError={error?.message}
+        onRetry={refresh}
+        switchPending={switchPending}
+        onToggleQna={(open) => void toggle(open)}
+        busyQuestionId={busyId}
+        actionError={actionError}
+        answerErrorFor={answerError}
+        onPin={(id, pinned) => void act(id, { pinned })}
+        onHide={(id, hidden) => void act(id, { hidden })}
+        onAnswered={(id, answered) => void act(id, { answered })}
+        onSaveAnswer={(id, text) => void act(id, { answerText: text }, true)}
+        onClearAnswer={(id) => void act(id, { answerText: null }, true)}
+      />
+    </div>
   )
 }

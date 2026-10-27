@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { roomCodeSchema } from '@livepulse/shared'
 import { JoinForm } from '../../components/sessions/JoinForm'
 import { joinSession } from '../../lib/api/sessions'
+import { routes } from '../../lib/routes'
 
 // A bad ?code= is dropped rather than shown, so the field simply starts empty.
 export const sanitiseCode = (raw: string | null): string => {
@@ -25,7 +26,7 @@ export function JoinClient() {
     setFieldErrors(undefined)
     const result = await joinSession(values.roomCode, values.displayName)
     if (result.ok) {
-      router.push(`/session/${result.data.session.roomCode}`)
+      router.push(routes.room(result.data.session.roomCode))
       return
     }
     setPending(false)

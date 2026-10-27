@@ -119,7 +119,7 @@ Developer इसे `.env` में copy करके अपनी values भ�
 | 3 | `import Page from './page'` | Landing page component |
 | 6 | `const html = renderToStaticMarkup(<Page />)` | एक बार render |
 | 8–11 | `<h1` और `LivePulse` मौजूद | Product का नाम दिखता है |
-| 13–17 | `/create` और `/join` के असली links; `disabled` शब्द नहीं | **[stage-02]** — यह test stage-02 में बदला गया |
+| 13–17 | `/host` और `/join` के असली links; `disabled` शब्द नहीं | **[stage-02]** — यह test stage-02 में बदला गया |
 
 **Foundation वाला दूसरा test** (`git show f382ca2:web/src/app/page.test.tsx`): दोनों buttons ("Create session",
 "Join session") `disabled` और `aria-disabled="true"` हों, और "Available in a later release" text हो — यानी

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { CreatePollBody, PresenterPoll } from '@livepulse/shared'
+import { usePollSuggestions } from '../../hooks/use-poll-suggestions'
 import { usePresenterPolls } from '../../hooks/use-presenter-polls'
 import { closePoll, createPoll, startPoll, updatePoll } from '../../lib/api/polls'
 import type { ApiResult } from '../../lib/api/sessions'
@@ -13,6 +14,7 @@ export type PresenterPollsProps = { sessionId: string }
 // Connects the polls panel to the API; every change is re-read so the list matches the server.
 export function PresenterPolls({ sessionId }: PresenterPollsProps) {
   const { polls, status, refresh, error } = usePresenterPolls(sessionId)
+  const ideas = usePollSuggestions(sessionId)
   const [createPending, setCreatePending] = useState(false)
   const [createError, setCreateError] = useState<string | undefined>()
   const [createFields, setCreateFields] = useState<Record<string, string> | undefined>()
@@ -57,6 +59,15 @@ export function PresenterPolls({ sessionId }: PresenterPollsProps) {
       onStart={(id) => void act(id, () => startPoll(id))}
       onClose={(id) => void act(id, () => closePoll(id))}
       onToggleResults={(id, showResults) => void act(id, () => updatePoll(id, { showResults }))}
+      suggestions={{
+        result: ideas.result,
+        loading: ideas.loading,
+        requesting: ideas.requesting,
+        error: ideas.error,
+        dismissed: ideas.dismissed,
+        onRequest: ideas.request,
+        onDismiss: ideas.dismiss,
+      }}
     />
   )
 }

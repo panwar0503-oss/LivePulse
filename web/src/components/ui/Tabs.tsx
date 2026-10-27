@@ -1,9 +1,10 @@
 'use client'
 
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { focusRing } from './styles'
+import { Icon, type IconName } from './Icon'
+import { focusRing, motionIn } from './styles'
 
-export type TabItem = { id: string; label: string; count?: number }
+export type TabItem = { id: string; label: string; count?: number; icon?: IconName }
 
 export type TabsProps = {
   tabs: TabItem[]
@@ -63,6 +64,7 @@ export function Tabs({ tabs, label, idPrefix, children }: TabsProps) {
                 selected ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-ink'
               }`}
             >
+              {tab.icon ? <Icon name={tab.icon} /> : null}
               {tab.label}
               {tab.count === undefined ? null : (
                 <span
@@ -83,7 +85,7 @@ export function Tabs({ tabs, label, idPrefix, children }: TabsProps) {
           aria-labelledby={`${idPrefix}-tab-${tab.id}`}
           tabIndex={0}
           hidden={tab.id !== activeId}
-          className={`rounded-2xl ${focusRing}`}
+          className={`rounded-2xl ${focusRing} ${motionIn}`}
         >
           {children(tab.id)}
         </div>

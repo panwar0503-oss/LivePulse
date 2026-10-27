@@ -34,11 +34,11 @@ Next.js App Router में हर component पहले से **Server Compo
 | `src/app/layout.tsx` | Server | सिर्फ़ `<html>`/`<body>` और metadata |
 | `src/app/page.tsx` | Server | सिर्फ़ दो `Link` — कोई state नहीं |
 | `src/app/join/page.tsx` | Server | सिर्फ़ `Suspense` wrapper; अंदर `JoinClient` client है |
-| `src/app/create/page.tsx` | Client | `useState`, API call |
+| `src/app/host/page.tsx` | Client | `useState`, API call |
 | `src/app/join/JoinClient.tsx` | Client | `useSearchParams`, `useRouter`, `useState` |
-| `src/app/presenter/[sessionId]/page.tsx` | Client | `useParams`, `useEffect`, `useState` |
-| `src/app/session/[roomCode]/page.tsx` | Client | `useParams` |
-| `src/app/session/[roomCode]/ParticipantClient.tsx` | Client | `useEffect`, `useState` |
+| `src/app/host/[sessionId]/page.tsx` | Client | `useParams`, `useEffect`, `useState` |
+| `src/app/room/[roomCode]/page.tsx` | Client | `useParams` |
+| `src/app/room/[roomCode]/ParticipantClient.tsx` | Client | `useEffect`, `useState` |
 | `components/sessions/CreateForm.tsx`, `JoinForm.tsx`, `PresenterKeyForm.tsx`, `PresenterDashboard.tsx`, `SessionCreatedPanel.tsx` | Client | form state / clipboard / confirm state |
 | `components/sessions/StatusMessage.tsx`, `ParticipantView.tsx` | directive नहीं | सिर्फ़ props दिखाते हैं |
 
@@ -125,7 +125,7 @@ directives की जगह अब एक `@import` काफ़ी है।
 
 - line 1: `next/link` का `Link`।
 - line 3-4: `linkClass` — दोनों links का एक ही style, साफ़ दिखने वाला focus outline (keyboard users के लिए)।
-- line 12-14: `/create` → "Create a session"।
+- line 12-14: `/host` → "Create a session"।
 - line 15-17: `/join` → "Join a session"।
 - States: कोई data नहीं, इसलिए loading/error/empty state की ज़रूरत नहीं।
 
@@ -255,7 +255,7 @@ Presenter key सिर्फ़ POST body में जाती है (line 1
 - **Key सिर्फ़ एक बार**: line 52 चेतावनी "This presenter key is shown once. Save it now."; key सिर्फ़
   `<code>` text में (line 71)। Comment line 45: key कभी link, URL या browser storage में नहीं।
   **कोई `localStorage`/`sessionStorage` नहीं** — page refresh पर key गायब, और यही चाहा गया है।
-- line 76-81: इकलौता link `/presenter/<sessionId>` — उसमें key नहीं। Presenter cookie create के समय ही
+- line 76-81: इकलौता link `/host/<sessionId>` — उसमें key नहीं। Presenter cookie create के समय ही
   set हो चुकी है, इसलिए dashboard सीधा खुलना चाहिए।
 - `CopyButton` (line 13-43) — **copy fallback**:
   - line 17-19: `navigator.clipboard` न हो (पुराना browser, या non-HTTPS non-localhost) → "Copy is not available...
@@ -343,7 +343,7 @@ Web tests का कुल जोड़: 2 + 5 + 8 + 10 + 8 + 2 = **35** (tracki
 हर data view को loading / error / empty / success संभालना है (`.claude/rules/frontend-react.md`)।
 इस feature में "empty" का मतलब ज़्यादातर "session नहीं मिला" या "अभी join नहीं किया" है — कोई list नहीं है।
 
-### 6.1 `/create` — `web/src/app/create/page.tsx` (Client — line 1)
+### 6.1 `/host` — `web/src/app/host/page.tsx` (Client — line 1)
 
 - line 10-14 state: `pending`, `error`, `fieldErrors`, `created`।
 - line 13-14: बनी हुई session (key सहित) **सिर्फ़ memory में** — URL या storage में नहीं।
@@ -368,7 +368,7 @@ Web tests का कुल जोड़: 2 + 5 + 8 + 10 + 8 + 2 = **35** (tracki
 - `JoinClient.tsx` line 10-13 `sanitiseCode`: `?code=` को `roomCodeSchema` से जाँचो; ग़लत हो तो चुपचाप `''`
   (comment line 9) — ग़लत code कभी दिखाया नहीं जाता।
 - line 17: `useSearchParams().get('code')`।
-- line 22-34: `joinSession` → success पर `router.push('/session/<roomCode>')` (line 28)। Success पर
+- line 22-34: `joinSession` → success पर `router.push('/room/<roomCode>')` (line 28)। Success पर
   `pending` वापस false नहीं होता, ताकि navigation तक button disabled रहे। Failure पर error + fields।
 
 | State | कैसे दिखता है |
@@ -376,9 +376,9 @@ Web tests का कुल जोड़: 2 + 5 + 8 + 10 + 8 + 2 = **35** (tracki
 | Loading | Suspense fallback "Loading…"; submit पर "Joining…" |
 | Error | `joinErrorText` से message (not open, rate limit, network, validation) |
 | Empty | ख़ाली form, या link से prefilled room code |
-| Success | `/session/<code>` पर redirect |
+| Success | `/room/<code>` पर redirect |
 
-### 6.3 `/presenter/[sessionId]` — `presenter/[sessionId]/page.tsx` (Client — line 1)
+### 6.3 `/host/[sessionId]` — `host/[sessionId]/page.tsx` (Client — line 1)
 
 - line 11-16: `View` discriminated union — `loading | needsKey | notFound | error | ready`।
 - line 19: `useParams` से `sessionId`।
@@ -403,7 +403,7 @@ Web tests का कुल जोड़: 2 + 5 + 8 + 10 + 8 + 2 = **35** (tracki
 | Error | message + "Try again" button जो `load()` दोबारा चलाता है (line 72-85) |
 | Success | `PresenterDashboard` (line 86-93); ended session भी यहीं, "Ended" के साथ |
 
-### 6.4 `/session/[roomCode]` — `session/[roomCode]/page.tsx` (Client — line 1)
+### 6.4 `/room/[roomCode]` — `room/[roomCode]/page.tsx` (Client — line 1)
 
 - line 7: `useParams` से `roomCode`; line 10: `.toUpperCase()` करके `ParticipantClient` को।
 - यह page Server Component भी हो सकता था (params prop से); इसे client रखा गया है (पुष्टि नहीं हुई कि क्यों —
@@ -441,6 +441,6 @@ Web tests का कुल जोड़: 2 + 5 + 8 + 10 + 8 + 2 = **35** (tracki
 
 - असली browser में ports 3000 और 4000 के बीच cookies, clipboard copy, और end-confirm click flow
   (tracking line 176-177)। Tests सिर्फ़ static HTML जाँचते हैं; click/typing/effects नहीं।
-- Pages (`create`, `join`, `presenter`, `session`) के अपने कोई tests नहीं हैं — सिर्फ़ components और
+- Pages (`host`, `join`, `host/[sessionId]`, `room`) के अपने कोई tests नहीं हैं — सिर्फ़ components और
   API client के।
 - Next build में "Next.js plugin was not detected in your ESLint configuration" चेतावनी (tracking line 174)।

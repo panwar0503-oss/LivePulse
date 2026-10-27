@@ -6,7 +6,7 @@ word cloud, Q&A, reactions) works without AI; the AI layer reads from it, sugges
 ## 1. Principles
 
 1. **Human in the loop.** AI never publishes to the audience by itself. It drafts (poll, answer, summary); the
-   presenter approves, edits, or dismisses. Exception: moderation may *hold* a question for review.
+   presenter approves, edits, or dismisses. Exception: moderation may _hold_ a question for review.
 2. **Core never depends on AI.** If the LLM is down, slow, or disabled, polls/Q&A/reactions keep working. AI
    features show "AI unavailable" and retry.
 3. **PostgreSQL stays the source of truth.** Embeddings live in PostgreSQL via `pgvector` — no separate vector
@@ -24,22 +24,23 @@ word cloud, Q&A, reactions) works without AI; the AI layer reads from it, sugges
 
 ## 2. Stack choices
 
-| Concern | Choice | Why |
-|---|---|---|
-| LLM | Anthropic Claude via `@langchain/anthropic` | Strong reasoning + structured output. Model ID in env (`AI_MODEL`), default `claude-opus-5-5`. |
-| Optional fast model | `AI_FAST_MODEL` (open decision: same as `AI_MODEL`, or `claude-haiku-5-5` for moderation/classification) | Cheaper/faster for high-volume, simple tasks. Developer decides. |
-| Orchestration | LangChain.js (`@langchain/core`) | Prompt templates, retrievers, output parsers, provider swap. |
-| Agent workflows | LangGraph.js (`@langchain/langgraph`) | Explicit state machine for multi-step flows (Q&A co-pilot), conditional edges, retries, inspectable state. |
-| Embeddings | Local model via Transformers.js (e.g. `all-MiniLM-L6-v2`, 384 dims), behind an `EmbeddingsProvider` interface | Free, offline, no data leaves the machine. Anthropic has no embeddings endpoint. A hosted provider can be swapped in later. |
-| Vector store | PostgreSQL `pgvector` extension, HNSW index, cosine distance | One database; transactions + joins with session data; Sequelize migrations manage it. |
-| Retrieval | Custom LangChain `BaseRetriever` over a parameterised Sequelize query | Keeps the "Sequelize only" rule (no second DB client/ORM such as `PGVectorStore`). |
-| Tool protocol | MCP server (`@modelcontextprotocol/sdk`, TypeScript) | Lets Claude Desktop / Claude Code drive a live session with the same service layer and authorization. |
-| Docker image | `pgvector/pgvector:pg16` instead of `postgres:16` | Same PostgreSQL, extension preinstalled. |
+| Concern             | Choice                                                                                                        | Why                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| LLM                 | Anthropic Claude via `@langchain/anthropic`                                                                   | Strong reasoning + structured output. Model ID in env (`AI_MODEL`), default `claude-opus-5-5`.                              |
+| Optional fast model | `AI_FAST_MODEL` (open decision: same as `AI_MODEL`, or `claude-haiku-5-5` for moderation/classification)      | Cheaper/faster for high-volume, simple tasks. Developer decides.                                                            |
+| Orchestration       | LangChain.js (`@langchain/core`)                                                                              | Prompt templates, retrievers, output parsers, provider swap.                                                                |
+| Agent workflows     | LangGraph.js (`@langchain/langgraph`)                                                                         | Explicit state machine for multi-step flows (Q&A co-pilot), conditional edges, retries, inspectable state.                  |
+| Embeddings          | Local model via Transformers.js (e.g. `all-MiniLM-L6-v2`, 384 dims), behind an `EmbeddingsProvider` interface | Free, offline, no data leaves the machine. Anthropic has no embeddings endpoint. A hosted provider can be swapped in later. |
+| Vector store        | PostgreSQL `pgvector` extension, HNSW index, cosine distance                                                  | One database; transactions + joins with session data; Sequelize migrations manage it.                                       |
+| Retrieval           | Custom LangChain `BaseRetriever` over a parameterised Sequelize query                                         | Keeps the "Sequelize only" rule (no second DB client/ORM such as `PGVectorStore`).                                          |
+| Tool protocol       | MCP server (`@modelcontextprotocol/sdk`, TypeScript)                                                          | Lets Claude Desktop / Claude Code drive a live session with the same service layer and authorization.                       |
+| Docker image        | `pgvector/pgvector:pg16` instead of `postgres:16`                                                             | Same PostgreSQL, extension preinstalled.                                                                                    |
 
 All packages above are **new dependencies** and need explicit approval when the phase that introduces them runs
 (`/execute` approval gate). Pin exact versions.
 
 ### Known integration risks (verify in Phase 9 before building on them)
+
 - Current Claude models reject `temperature` / `top_p` / `top_k` (400) and reject forced `tool_choice`
   (`any` / `tool`). Some LangChain helpers (e.g. `withStructuredOutput` in tool-calling mode) force a tool call by
   default. Use the provider's JSON-schema / structured-output mode or `tool_choice: auto`, and make sure no
@@ -102,6 +103,7 @@ is enough and keeps one source of truth.
 ## 5. Features
 
 ### 5.1 Knowledge base (RAG ingestion) — Phase 10
+
 - Presenter uploads slides/notes: PDF, Markdown, or plain text (size and page limits enforced).
 - Pipeline: extract text → normalise → chunk (~500–800 tokens, ~15% overlap, keep page/heading metadata) →
   embed in batches → store `knowledge_chunks(content, embedding, page, heading)` → document `READY`.
@@ -111,43 +113,76 @@ is enough and keeps one source of truth.
 - No match above threshold → the AI must say it does not know (no fabrication).
 
 ### 5.2 AI poll generator — Phase 11 (LangChain chain)
+
 - Input: presenter topic/instruction + retrieved chunks + recent Q&A themes.
 - Output (Zod): 1–3 polls, each `{ question, options[2–6], rationale, sourceChunkIds[] }`.
 - Presenter sees suggestions, can edit, then "Create poll" → normal poll (DRAFT) via the existing poll service.
 - Optional: quiz mode with a marked correct option (only if requested in the requirement).
 
 ### 5.3 AI Q&A co-pilot — Phase 12 (LangGraph)
-State machine run per submitted question:
+
+Built design (`api/src/ai/tasks/qna-copilot/`). One `QNA_COPILOT` job per question runs the whole graph.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> moderate
-  moderate --> hold: unsafe / off-topic
-  moderate --> embed: ok
+  [*] --> routeByStep
+  routeByStep --> moderate: step = moderate
+  routeByStep --> embed: step = embed
+  routeByStep --> dedupe: step = dedupe
+  routeByStep --> retrieve: step = retrieve
+  routeByStep --> draft: step = draft
+  routeByStep --> selfCheck: step = selfCheck
+  routeByStep --> awaitPresenter: step = awaitPresenter
+  moderate --> embed: OK
+  moderate --> [*]: TOXIC, SPAM, OFF_TOPIC or PII (held)
   embed --> dedupe
-  dedupe --> mergeDuplicate: similarity >= threshold
-  dedupe --> retrieve: new question
-  retrieve --> draftAnswer
-  draftAnswer --> selfCheck
-  selfCheck --> draftAnswer: ungrounded (max 1 retry)
-  selfCheck --> awaitPresenter: grounded or "not in materials"
-  mergeDuplicate --> [*]
-  hold --> [*]
+  dedupe --> [*]: near-duplicate (merged)
+  dedupe --> retrieve: new question (visible, in a cluster)
+  retrieve --> draft
+  draft --> selfCheck
+  draft --> draft: no usable reply (max 2 attempts)
+  selfCheck --> awaitPresenter: supported
+  selfCheck --> draft: unsupported (max 2 attempts)
+  selfCheck --> awaitPresenter: attempts used up (NOT_COVERED)
   awaitPresenter --> [*]
 ```
 
-- **moderate**: classify `{ label: OK | TOXIC | SPAM | OFF_TOPIC | PII, reason }`. Not OK → question status
-  `PENDING_REVIEW`, visible only to presenter, who can release or reject.
-- **dedupe**: nearest existing question in the session by embedding; above threshold → link as duplicate, its
-  upvote goes to the canonical question; the participant sees "Similar question already asked — upvoted it".
-- **retrieve + draftAnswer**: grounded answer with citations to chunks; confidence score.
-- **selfCheck**: verifies every claim is supported by the cited chunks; otherwise retry once or answer
-  "Not covered in the materials".
-- **awaitPresenter**: persisted `ai_answer_drafts(status=PENDING_REVIEW)`. The presenter approves (optionally
-  edited) → answer published to the room. Durability comes from the table, not from in-memory graph state, so
-  approvals survive restarts.
+- **Table as checkpoint.** Each node commits its result and `questions.ai_step` in its own short transaction. No
+  LangGraph checkpointer is used. A START router reads `ai_step`, so a recovered job resumes at the node after the last
+  committed one. Finished nodes are not run again.
+- **Provider calls in three nodes only.** `moderate` returns the label, a reason, the question's `language` and an
+  English query. `draft` writes the answer from the ready passages, with citations. `selfCheck` is a separate call that
+  checks every claim against the cited passages. Parse failure counts as "not supported".
+- **English query for dedupe and retrieval.** The local embedder is English-only, so `embed`, `dedupe`, clusters and
+  retrieval use the English query from `moderate`. Non-English questions are answered in their own language.
+- **moderate.** Classifies `{ label: OK | TOXIC | SPAM | OFF_TOPIC | PII, reason }`. A question that is not OK becomes
+  HELD: presenter only, released or rejected by the presenter. No draft is made.
+- **embed and dedupe.** One transaction with the session and advisory locks. A question at or above
+  `QNA_DUPLICATE_SIMILARITY` (0.90) becomes MERGED, `duplicate_of_id` is set, and the asker's upvote moves to the
+  canonical question. Otherwise it becomes VISIBLE and joins the nearest cluster (`QNA_CLUSTER_SIMILARITY`, 0.75) by
+  running-mean centroid.
+- **retrieve and draft.** Only READY passages of the session are used. No ready passage means "Not covered in the
+  materials" with no model call. A draft is `GROUNDED` (with at most three citations) or `NOT_COVERED`, and is at most
+  500 characters, one line, plain text. A grounded draft is retried once if it has no valid citation or is not
+  supported.
+- **selfCheck and the approval gate.** A grounded draft stays DRAFTING until its self-check passes, then becomes
+  PENDING_REVIEW. The presenter can never approve an unchecked draft. A draft that is still unsupported after its
+  attempts is marked NOT_COVERED.
+- **awaitPresenter.** The draft is persisted as `ai_answer_drafts` in PENDING_REVIEW, and `qna:review-updated` goes to
+  the presenter room. Nothing is shown to the room.
+- **Resume.** The English query is not stored. On resume, a run that needs it repeats the read-only moderation prompt
+  to recover it. `draft_attempts` and the UNIQUE draft row per question prevent a second draft.
+- **Fail-open.** If AI is off, over budget or not usable when the question is submitted, the question is VISIBLE at once
+  and no job runs. If a run fails and gives up, its question is released to VISIBLE. A release after a failed run is
+  not moderated; the presenter can still hide it.
+- **Approval.** The presenter may edit the draft text (500 characters at most). Approval writes only the approved text
+  to the question's `answer_text`, with citations reduced to document name and location, and no quote text. The room
+  gets the id-only `question:updated` and refetches. No draft text travels over a socket. Approval survives restarts
+  because it is stored in the table.
+- **Session end.** Open drafts become CANCELLED. Questions still CHECKING become HELD. Approved answers remain.
 
 ### 5.4 Live audience insights — Phase 13
+
 - **Semantic word themes**: cluster word-cloud responses by embedding similarity ("collab", "teamwork",
   "working together" → one theme), LLM names each theme. Shown next to (not instead of) the exact-count cloud.
 - **Sentiment pulse**: classify recent responses/questions + reaction mix into a rolling room mood
@@ -155,29 +190,41 @@ stateDiagram-v2
 - **Room summary on demand**: "What is the room thinking right now?" → 3–5 bullets with evidence counts.
 - Debounced: recompute at most every `AI_INSIGHTS_INTERVAL_SECONDS` and only when new input arrived.
 
-### 5.5 Post-session report + "Ask your session" — Phase 14
-- After a session ends: report with key takeaways, poll outcomes, top questions (answered/unanswered), themes,
-  sentiment timeline, suggested follow-ups. Numbers come from SQL aggregates, the LLM only writes narrative
-  around them (no invented numbers).
-- "Ask your session": presenter chat over session data (questions, responses, poll results, knowledge chunks)
-  using RAG; answers streamed to the browser (SSE or socket chunks) with citations.
+### 5.5 Post-session report + "Ask your session" — Phase 14 (built)
+
+Built design (`requirements/ai-session-report/`). Facts only: the report has no AI-written narrative, takeaways, themes or sentiment timeline. Those are not built.
+
+- **Report (no AI, no table).** The report is computed from the session's data on each read, in one read-only REPEATABLE READ transaction with aggregate queries: poll results, top word-cloud terms, question counts, top-upvoted questions, knowledge documents and AI usage. Knowledge documents are removed when the session ends, so after the end the report shows a count of successful ingests instead of names. Export is the same DTO as JSON.
+- **Chat over read-only tools.** Each question builds a DTO snapshot of the session. The model gets a fixed set of read-only tools that run over that snapshot. They take no session id, cannot write, and cannot reach another session. Tool results are capped and wrapped as untrusted data; the system prompt says to answer only from tool results. A turn is limited to 4 tool rounds and 45 seconds.
+- **Streaming on the POST response.** The provider's streaming method (`converse`) yields text deltas, tool calls and usage. The answer is sent as SSE on the response to `POST /sessions/:id/report/chat`, so only the presenter's request receives it and no socket room is used. Closing the connection aborts the model call.
+- **Server-decided sources.** Each tool result carries server references (poll, word prompt, question, document, AI usage) that the server maps to labels. Citations the model writes are ignored.
+- **Budget.** A question reserves tokens with an `ai_jobs` row of type `SESSION_REPORT`, status RUNNING, `max_attempts = 1`, `reserved_tokens = 8000` and `dedupe_key = 'report-chat'`, taken under the session row lock. Settle charges the real tokens, releases the reservation and emits `ai:usage` to the presenter room. Only one streaming turn runs per session at a time.
+- **Incomplete answers.** A failed, aborted, timed-out, capped or over-round answer is settled `INCOMPLETE` with an error code and keeps its partial text. A reservation left by a crash is released by recovery, because `max_attempts = 1`; history shows orphaned turns as `INCOMPLETE`.
+- **After the end.** Chat stays allowed after the session ends when AI was on. AI cannot be turned on after the end, so a session that ended with AI off has no chat.
+- **Storage.** `session_chat_turns`: one row per question and answer; `client_message_id` unique per session; `question` up to 500 characters; `answer` up to 8,000 characters; bounded `sources` jsonb; deleted with the session.
 
 ### 5.6 MCP server — Phase 15
+
 A separate entry point (`api/src/mcp/`) over stdio exposing presenter tools. Each tool is a thin call to the
 LivePulse REST API with the presenter key, so authorization, validation, and emit-after-commit rules are
 identical to the web UI and there is no second write path. Tool inputs are Zod-validated (shared schemas).
 
-| Tool | Effect |
-|---|---|
-| `list_my_sessions` | Sessions the presenter key can access |
-| `get_session_snapshot` | Status, participant count, active poll, results, top questions |
-| `create_poll` / `start_poll` / `close_poll` | Same rules as REST; audience sees it live |
-| `suggest_polls` | Runs the poll generator, returns suggestions |
-| `list_questions` / `approve_answer` | Read Q&A, publish an approved draft |
-| `get_insights` / `get_session_report` | Read latest AI insights/report |
+| Tool                     | Effect                                                              |
+| ------------------------ | ------------------------------------------------------------------- |
+| `get_session_snapshot`   | Read: session state, polls, top questions, recent AI actions        |
+| `suggest_polls`          | Read: runs the poll generator and returns suggestions               |
+| `list_questions`         | Read: visible questions (max 50)                                    |
+| `get_session_report`     | Read: the session report                                            |
+| `propose_create_poll`    | Proposal: stores a pending CREATE_POLL action                       |
+| `propose_start_poll`     | Proposal: stores a pending START_POLL action                        |
+| `propose_close_poll`     | Proposal: stores a pending CLOSE_POLL action                        |
+| `propose_publish_answer` | Proposal: stores a pending PUBLISH_ANSWER action                    |
 
-Resources: `livepulse://session/{id}/snapshot`. Config via env in the Claude Desktop MCP entry:
-`LIVEPULSE_API_URL`, `LIVEPULSE_PRESENTER_KEY` (one session per key). Demo: in Claude Desktop, "create a poll about pricing in my session" → audience phones update
+Writes are proposals only. A `propose_*` tool stores an action with status `PROPOSED`. The audience sees nothing
+until the presenter approves it in the AI panel (see `04-api-contract.md`, AI actions).
+
+No MCP resources; the snapshot is a tool. Config via env in the Claude Desktop MCP entry:
+`LIVEPULSE_API_URL`, `LIVEPULSE_SESSION_ID`, `LIVEPULSE_PRESENTER_KEY` (one session per key). Demo: in Claude Desktop, "create a poll about pricing in my session", approve it in the AI panel → audience phones update
 live.
 
 ### 5.7 Differentiators — what makes this more than a chatbot
@@ -227,6 +274,7 @@ Answers cite tool results. Each tool call is recorded on the job. Tools use stri
 auto` (current models reject forced tool use).
 
 ## 6. Prompt management
+
 - Prompts live in code as versioned templates (`api/src/ai/prompts/<name>.v1.ts`), not in the DB.
 - Each job records `prompt_version` and `model` for traceability.
 - System prompt states the role, the delimiting convention for untrusted text (`<audience_input>…</audience_input>`),
@@ -234,6 +282,7 @@ auto` (current models reject forced tool use).
 - Keep the stable prefix first (system + instructions) so prompt caching can apply.
 
 ## 7. Cost, latency, and limits
+
 - Per-session token budget (`AI_SESSION_TOKEN_BUDGET`) checked before every call; exceeded → feature pauses with
   a clear presenter message.
 - Global kill switch `AI_ENABLED=false`; per-session toggle by the presenter.
@@ -242,6 +291,7 @@ auto` (current models reject forced tool use).
 - Usage (input/output tokens, latency) stored on `ai_jobs` and visible on a small presenter "AI usage" panel.
 
 ## 8. AI security (summary — details in 06)
+
 - Prompt injection: audience text delimited and labelled untrusted; the model gets no state-changing tools in
   audience-triggered flows; outputs are schema-validated and rendered as text.
 - Data minimisation: send display names to the LLM only when needed (default: omit them).
@@ -250,6 +300,7 @@ auto` (current models reject forced tool use).
   `AI_PROVIDER=anthropic`.
 
 ## 9. Evaluation
+
 - Golden set in `api/tests/ai/fixtures/`: ~20 questions with expected grounded/ungrounded outcome, ~10 duplicate
   pairs, ~10 moderation cases, 3 documents.
 - Automated checks (fake provider in CI): graph routing, schema validation, threshold logic, retrieval ranking.

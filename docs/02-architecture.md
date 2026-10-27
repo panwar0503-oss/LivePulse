@@ -50,21 +50,23 @@ api/migrations/  generated, up + down
 
 ## 3. Responsibilities
 
-| Layer | Does | Never does |
-|---|---|---|
-| Next.js | Renders UI, calls REST for commands + snapshots, listens to sockets | Decides authorization or counts |
-| Express controllers | Validate (Zod), authenticate, call service, map errors to envelope | Business logic |
-| Services | Rules, transactions, authorization on loaded records, enqueue AI jobs in the same transaction | Emit inside a transaction |
-| Sequelize / PostgreSQL | Source of truth, constraints, aggregation, vector search | — |
-| Socket.IO | Low-latency fan-out of committed changes | Act as storage |
-| Redis adapter | Cross-instance broadcast | Durable replay |
-| AI module | Read data, call LLM/embeddings, persist suggestions, emit to presenter | Publish to audience without approval; run in request path |
-| MCP server | Expose presenter tools over stdio by calling the REST API with the presenter key | Touch the DB directly or bypass API authorization |
+| Layer                  | Does                                                                                          | Never does                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Next.js                | Renders UI, calls REST for commands + snapshots, listens to sockets                           | Decides authorization or counts                           |
+| Express controllers    | Validate (Zod), authenticate, call service, map errors to envelope                            | Business logic                                            |
+| Services               | Rules, transactions, authorization on loaded records, enqueue AI jobs in the same transaction | Emit inside a transaction                                 |
+| Sequelize / PostgreSQL | Source of truth, constraints, aggregation, vector search                                      | —                                                         |
+| Socket.IO              | Low-latency fan-out of committed changes                                                      | Act as storage                                            |
+| Redis adapter          | Cross-instance broadcast                                                                      | Durable replay                                            |
+| AI module              | Read data, call LLM/embeddings, persist suggestions, emit to presenter                        | Publish to audience without approval; run in request path |
+| MCP server             | Expose presenter tools over stdio by calling the REST API with the presenter key              | Touch the DB directly or bypass API authorization         |
 
 ## 4. Write flows
 
 ### Poll vote
+
 Votes are HTTP (`POST /api/polls/:id/votes`), not socket commands.
+
 1. Validate the body (Zod); authenticate the participant cookie for the poll's session (session id read from the poll row).
 2. Transaction: lock the poll row `FOR SHARE`. Refuse DRAFT (404) and CLOSED (409 `POLL_NOT_ACTIVE`); check the option
    belongs to the poll (400 `INVALID_OPTION`); insert the vote. Concurrent votes do not block each other.
@@ -76,6 +78,7 @@ Votes are HTTP (`POST /api/polls/:id/votes`), not socket commands.
    counted) or sees CLOSED and is refused. Never ambiguous.
 
 ### Poll lifecycle locks
+
 - Lock order is always session row before poll row. No transaction locks a poll and then a session.
 - Create: session `FOR SHARE` (waits for an end to commit), then count and insert.
 - Start: session `FOR SHARE`, then poll `FOR UPDATE`. The partial unique index `polls_one_active_per_session` is the
@@ -87,7 +90,9 @@ Votes are HTTP (`POST /api/polls/:id/votes`), not socket commands.
   `poll:results` then `poll:closed`; switch → `poll:updated` then `poll:results`. Vote counts are combined per poll.
 
 ### Word submit
+
 Submissions are HTTP (`POST /api/word-prompts/:id/responses`), not socket commands.
+
 1. Authenticate the participant cookie for the prompt's session (session id read from the prompt row) before the body is
    validated. Validate the text with Zod and normalise it (display form and key) in the service.
 2. Transaction: lock the prompt row `FOR SHARE`. Refuse DRAFT (404) and CLOSED (409 `PROMPT_NOT_ACTIVE`); insert the
@@ -100,6 +105,7 @@ Submissions are HTTP (`POST /api/word-prompts/:id/responses`), not socket comman
    the close (and is counted) or sees CLOSED and is refused.
 
 ### Word prompt lifecycle locks
+
 - Lock order is session row before prompt row, as for polls.
 - Create: session `FOR SHARE`, then count and insert.
 - Start: session `FOR UPDATE` (queues concurrent starts in one session), then the target prompt `FOR UPDATE`, then
@@ -115,7 +121,9 @@ Submissions are HTTP (`POST /api/word-prompts/:id/responses`), not socket comman
   switch → `wordcloud:updated` then `wordcloud:results`. Submissions are combined per prompt.
 
 ### Q&A writes (Phase 7, built)
+
 Submit, upvote and moderation are HTTP, not socket commands. Each write commits first, then emits.
+
 1. Submit (`POST /api/sessions/by-code/:code/questions`): the participant cookie is checked before the body is validated.
    The text is validated with Zod; the duplicate key (`text_key`) is computed in the service, never taken from the request.
 2. Submit transaction: session `FOR SHARE` (409 `SESSION_ENDED`, then 409 `QNA_CLOSED` if `qna_open` is false) →
@@ -141,6 +149,7 @@ Submit, upvote and moderation are HTTP, not socket commands. Each write commits 
    hide or restore shows the current state.
 
 ### AI jobs (ai-foundation, built)
+
 AI work never runs inside a request or a transaction. A request commits its data, then enqueues an `ai_jobs` row and nudges
 the runner. Requirement: `requirements/ai-foundation/`.
 
@@ -170,6 +179,7 @@ the runner. Requirement: `requirements/ai-foundation/`.
   only; there is no pgvector npm package. Embeddings are 384-dimensional (`EMBEDDING_DIM`).
 
 ### Question with AI (Phase 12, not built)
+
 1. Submit → validate, rate limit, insert question (`VISIBLE`, or `PENDING_REVIEW` when AI moderation is
    on and moderation runs before display — see Phase 12 decision) + `ai_jobs(type=QNA_COPILOT)` in one transaction.
 2. Commit → emit `question:created` (session room if visible; presenter room if pending).
@@ -178,11 +188,43 @@ the runner. Requirement: `requirements/ai-foundation/`.
 4. Presenter approves → transaction updates draft + question answer → commit → emit `question:answered` to the
    session room.
 
-### Document ingestion
-Upload (multipart, size limit) → store document row `PROCESSING` + job → runner extracts, chunks, embeds, inserts
-chunks → document `READY` → emit `ai:knowledge-updated` to presenter.
+### Knowledge base (RAG, knowledge-base-rag, built)
+
+Presenter only. Requirement: `requirements/knowledge-base-rag/`.
+
+- **Upload:** `POST /api/sessions/:id/knowledge/documents` takes the raw file bytes (no multipart) and the file name in
+  `X-File-Name`. `express.raw` with a 10 MB limit runs on this route only, and a Content-Length over the limit is refused
+  (413) before any byte is buffered. Presenter authorisation and the upload rate limit run first. The type is checked by
+  content (`%PDF-` for PDF, strict UTF-8 without NUL bytes for text) and must match the `.pdf` or `.txt` extension. A session
+  holds at most 20 documents; the same content twice in one session is refused (409).
+- **Extraction in a worker thread:** PDF text (`unpdf`) and text files are extracted in a worker with a 256 MB heap
+  limit, a 30 s timeout (the worker is terminated) and caps of 300 pages and 2,000,000 characters. The request path never
+  parses a file.
+- **Background ingest:** the upload commits a `knowledge_documents` row (`PROCESSING`) and an `ai_jobs` row
+  (`INGEST_DOCUMENT`, dedupe key `ingest:<documentId>`) in one transaction, then nudges the runner. The job input is only
+  the document id. The task chunks the text (about 800 characters, 100 overlap, a passage never spans two pages, at most
+  2,000 passages) and embeds the passages in batches of 32 with the local 384-dimension model. Extraction and embedding run
+  outside any transaction. The result is committed only if the document still exists, is `PROCESSING`, and the session has
+  not ended; then the stored bytes are cleared.
+- **Storage (PostgreSQL):** `knowledge_documents` (original bytes in `bytea` until processed; status `PROCESSING`, `READY`
+  or `FAILED` with a fixed reason) and `knowledge_passages` (`vector(384)` embedding, generated `tsvector`, page number or
+  section number). Passages are never returned to anyone except the presenter.
+- **Hybrid search:** `POST /api/sessions/:id/knowledge/search`. The top 50 passages by cosine distance and the top 50 by
+  full-text rank are taken from the session only, combined with reciprocal rank fusion (k = 60), and the top 20 are
+  reranked. The top 8 are returned. Passages below the reranker's minimum score are dropped, so a weak match is never
+  invented into a result (the minimum is a constant per reranker, not an env value). The reranker is an interface: `fake`
+  (token overlap, default, used by tests) or `local` (cross-encoder `Xenova/ms-marco-MiniLM-L-6-v2`; its minimum of 0.5 is
+  unverified until the live test). If the reranker fails, the fused order is returned with `reranked: false`. Search does
+  not need AI to be on for the session.
+- **Lifecycle:** delete removes the document and its passages at once and cancels its waiting job. Ending a session deletes
+  all its documents in the same transaction that ends it. A job that stops without a result shows the document as `FAILED`
+  with `PROCESSING_STOPPED`.
+- **Realtime:** `knowledge:document-status` goes to the presenter room only, after commit, with no text and no file name.
+- **Retrieved text is data:** it is rendered as plain text and no model reads it in this phase. Phase 12 must wrap it in
+  delimited, untrusted blocks before any prompt.
 
 ## 5. Socket.IO and Redis adapter
+
 - Socket.IO on the same HTTP server, path `/api/socket.io`, websocket transport only.
 - `redis` + `@socket.io/redis-adapter`; the adapter's pub/sub clients are duplicates of the command client.
   Connect all three clients before accepting traffic.
@@ -197,22 +239,24 @@ chunks → document `READY` → emit `ai:knowledge-updated` to presenter.
 - Integration test: two Socket.IO servers, one Redis; a client on B receives a room broadcast emitted on A.
 
 ## 6. Sticky sessions and transports
+
 Realtime uses WebSocket-only transport (decided in phase 4). Long-polling behind multiple instances would need sticky
 sessions, which are out of scope, so the trade-off is no fallback on networks that block WebSockets. Test the
 transport you actually configure.
 
 ## 7. Failure semantics
 
-| Failure | Behaviour |
-|---|---|
-| PostgreSQL down | Commands fail with 503; no success broadcast; `/ready` 503 |
-| Redis down | Durable writes still succeed; sockets kept; cross-instance fan-out degraded; `/ready` 200 `degraded`; `REALTIME_DEGRADED` notice; clients reconcile via HTTP |
-| LLM down / timeout | Job retries then FAILED; presenter sees retryable AI error; core features unaffected |
-| Budget exhausted | AI jobs for that session skipped with `AI_BUDGET_EXCEEDED`; presenter informed |
-| Server restart | Data survives; presence recalculated; PENDING/stale RUNNING AI jobs resumed |
-| Missed / duplicate / out-of-order events | Clients idempotent by entity ID + `version`/timestamp; refetch on gap |
+| Failure                                  | Behaviour                                                                                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| PostgreSQL down                          | Commands fail with 503; no success broadcast; `/ready` 503                                                                                                   |
+| Redis down                               | Durable writes still succeed; sockets kept; cross-instance fan-out degraded; `/ready` 200 `degraded`; `REALTIME_DEGRADED` notice; clients reconcile via HTTP |
+| LLM down / timeout                       | Job retries then FAILED; presenter sees retryable AI error; core features unaffected                                                                         |
+| Budget exhausted                         | AI jobs for that session skipped with `AI_BUDGET_EXCEEDED`; presenter informed                                                                               |
+| Server restart                           | Data survives; presence recalculated; PENDING/stale RUNNING AI jobs resumed                                                                                  |
+| Missed / duplicate / out-of-order events | Clients idempotent by entity ID + `version`/timestamp; refetch on gap                                                                                        |
 
 ## 8. Scaling talking points
+
 Stateless API instances behind a WebSocket LB · Redis adapter for rooms · PostgreSQL indexes, pooling, HNSW vector
 index · AI runner concurrency limits and per-session budgets · move AI runner to a separate worker process /
 durable queue when load justifies it · reaction bursts aggregated server-side to protect fan-out · metrics: active

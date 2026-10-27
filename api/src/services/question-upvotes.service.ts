@@ -36,12 +36,16 @@ export async function upvoteQuestion(
       if (!session.qnaOpen) throw new AppError(409, 'QNA_CLOSED', 'Q&A is paused by the presenter.')
       const question = await Question.findOne({
         where: { id: questionId, sessionId },
+        attributes: ['id', 'participantId', 'hidden', 'reviewState'],
         lock: transaction.LOCK.SHARE,
         transaction,
       })
       // Hidden questions get the same answer as unknown ones, so their existence is not revealed.
       if (!question || question.hidden) throw questionNotFound()
-      if (question.participantId === participantId) {
+      const mine = question.participantId === participantId
+      // A question in review exists only for its asker; the asker still cannot upvote it (below).
+      if (question.reviewState !== 'VISIBLE' && !mine) throw questionNotFound()
+      if (mine) {
         throw new AppError(403, 'OWN_QUESTION', 'You cannot upvote your own question.')
       }
       await QuestionUpvote.create({ questionId, participantId }, { transaction })
@@ -74,7 +78,8 @@ export async function upvotesFor(deps: QuestionsDeps, sessionId: string): Promis
     async (transaction) => {
       const questions = await deps.sequelize.query<{ id: string; upvotes: number }>(
         'SELECT q.id, (SELECT COUNT(*)::int FROM question_upvotes u WHERE u.question_id = q.id) AS upvotes ' +
-          `FROM questions q WHERE q.session_id = :sessionId AND q.hidden = false ${QUESTION_ORDER}`,
+          'FROM questions q WHERE q.session_id = :sessionId AND q.hidden = false ' +
+          `AND q.review_state = 'VISIBLE' ${QUESTION_ORDER}`,
         { replacements: { sessionId }, type: QueryTypes.SELECT, transaction },
       )
       const [total] = await deps.sequelize.query<{ version: number }>(

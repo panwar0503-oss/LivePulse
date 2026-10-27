@@ -1,13 +1,18 @@
 import type {
+  AiActionUpdated,
   AiJobFailed,
   AiStatus,
   AiUsage,
+  KnowledgeDocumentStatusEvent,
   PollClosed,
+  PollSuggestionsReady,
   PollResults,
   PollResultsEvent,
   PollStarted,
   PollUpdated,
   PresenceCount,
+  QnaClustersUpdated,
+  QnaReviewUpdated,
   QnaStatus,
   QuestionCreated,
   QuestionUpdated,
@@ -50,6 +55,15 @@ export type SessionSocketState = {
   aiStatus: AiStatus | null
   aiUsage: AiUsage | null
   aiFailure: AiJobFailed | null
+  // Latest document status change for the presenter; the hook merges it into the HTTP list.
+  knowledgeStatus: KnowledgeDocumentStatusEvent | null
+  // Latest 'suggestions ready' signal; carries no text, the hook re-fetches over HTTP.
+  pollSuggestionsReady: PollSuggestionsReady | null
+  // Latest Q&A copilot signals (ids only); the hook re-fetches over HTTP.
+  qnaReviewUpdated: QnaReviewUpdated | null
+  qnaClustersUpdated: QnaClustersUpdated | null
+  // Latest AI action change (ids and enums only); the hook re-fetches the list over HTTP.
+  aiActionUpdated: AiActionUpdated | null
 }
 
 export type SessionSocketEvent =
@@ -74,6 +88,11 @@ export type SessionSocketEvent =
   | { type: 'ai_status'; payload: AiStatus }
   | { type: 'ai_usage'; payload: AiUsage }
   | { type: 'ai_job_failed'; payload: AiJobFailed }
+  | { type: 'knowledge_status'; payload: KnowledgeDocumentStatusEvent }
+  | { type: 'poll_suggestions_ready'; payload: PollSuggestionsReady }
+  | { type: 'qna_review_updated'; payload: QnaReviewUpdated }
+  | { type: 'qna_clusters_updated'; payload: QnaClustersUpdated }
+  | { type: 'ai_action_updated'; payload: AiActionUpdated }
 
 // Side effects the hook performs after applying the new state; the reducer itself stays pure.
 export type SessionSocketEffects = {
@@ -103,6 +122,11 @@ export const initialSessionSocketState: SessionSocketState = {
   aiStatus: null,
   aiUsage: null,
   aiFailure: null,
+  knowledgeStatus: null,
+  pollSuggestionsReady: null,
+  qnaReviewUpdated: null,
+  qnaClustersUpdated: null,
+  aiActionUpdated: null,
 }
 
 const NO_EFFECTS: SessionSocketEffects = { refetch: false, reconnect: false, stop: false }
@@ -234,5 +258,20 @@ export const sessionSocketReducer = (
 
     case 'ai_job_failed':
       return same({ ...state, aiFailure: event.payload })
+
+    case 'knowledge_status':
+      return same({ ...state, knowledgeStatus: event.payload })
+
+    case 'poll_suggestions_ready':
+      return same({ ...state, pollSuggestionsReady: event.payload })
+
+    case 'qna_review_updated':
+      return same({ ...state, qnaReviewUpdated: event.payload })
+
+    case 'qna_clusters_updated':
+      return same({ ...state, qnaClustersUpdated: event.payload })
+
+    case 'ai_action_updated':
+      return same({ ...state, aiActionUpdated: event.payload })
   }
 }

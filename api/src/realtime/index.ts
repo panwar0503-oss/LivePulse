@@ -7,8 +7,10 @@ import type { Env } from '../config/env.js'
 import { describeError, type RedisClients } from '../db/redis.js'
 import type { SessionModels } from '../services/sessions.service.js'
 import { createAiEmitters, type AiEmitters } from './ai.js'
+import { createKnowledgeEmitters, type KnowledgeEmitters } from './knowledge.js'
 import { createPollEmitters, type LoadPollResults, type PollEmitters } from './polls.js'
 import { createPresence, PRESENCE_COUNT_TIMEOUT_MS } from './presence.js'
+import { createQnaCopilotEmitters, type QnaCopilotEmitters } from './qna-copilot.js'
 import {
   createQuestionEmitters,
   type LoadQuestion,
@@ -65,6 +67,10 @@ export type Realtime = {
   questions: QuestionEmitters
   /** AI status, usage and failures, presenter room only; call after commit (runner and switch hooks). */
   ai: AiEmitters
+  /** Knowledge document status, presenter room only; call after commit (upload and ingest). */
+  knowledge: KnowledgeEmitters
+  /** Copilot review and cluster notices (presenter room) and copilot-run room events; call after commit. */
+  qnaCopilot: QnaCopilotEmitters
   close: () => Promise<void>
 }
 
@@ -177,6 +183,8 @@ export const createRealtime = ({
     wordCloud,
     questions,
     ai: createAiEmitters({ io, logger }),
+    knowledge: createKnowledgeEmitters({ io, logger }),
+    qnaCopilot: createQnaCopilotEmitters({ io, logger, questions }),
     close: async () => {
       stopWatchingRedis()
       presence.clearPresenceTimers()

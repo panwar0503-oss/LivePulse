@@ -3,6 +3,11 @@
 import type { PresenterQuestion } from '@livepulse/shared'
 import { StatusMessage } from '../sessions/StatusMessage'
 import { EmptyState } from '../ui/EmptyState'
+import { ErrorState } from '../ui/ErrorState'
+import { Icon } from '../ui/Icon'
+import { LoadingState } from '../ui/LoadingState'
+import { ScrollArea } from '../ui/ScrollArea'
+import { badgeClass, button, hintClass, switchThumbClass, switchTrackClass } from '../ui/styles'
 import { AnswerForm } from './AnswerForm'
 
 export type QnaPanelProps = {
@@ -25,10 +30,6 @@ export type QnaPanelProps = {
 
 export const upvotesText = (count: number): string => `${count} ${count === 1 ? 'upvote' : 'upvotes'}`
 
-const buttonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl min-h-11 px-5 font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50'
-const badgeClass =
-  'inline-flex w-fit items-center rounded-full border border-slate-300 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-muted'
 
 type QuestionCardProps = Pick<
   QnaPanelProps,
@@ -45,7 +46,7 @@ function QuestionCard({
   onSaveAnswer,
   onClearAnswer,
 }: QuestionCardProps) {
-  const actionClass = `${buttonClass} border border-slate-300 bg-white enabled:hover:bg-slate-50`
+  const actionClass = button('secondary')
   return (
     <li
       className={`flex flex-col gap-3 rounded-2xl border bg-white p-4 ${q.pinned ? 'border-2 border-brand-600' : 'border-line'}`}
@@ -56,7 +57,7 @@ function QuestionCard({
         {q.hidden ? <span className={badgeClass}>Hidden</span> : null}
         <span className="text-sm font-medium text-muted">{upvotesText(q.upvotes)}</span>
       </div>
-      <p className="text-lg font-semibold break-words">{q.text}</p>
+      <p className="text-base font-semibold break-words">{q.text}</p>
       {q.answerText ? (
         <p className="break-words text-slate-900">
           <span className="font-semibold">Answer: </span>
@@ -68,6 +69,7 @@ function QuestionCard({
           {q.pinned ? 'Unpin' : 'Pin'}
         </button>
         <button type="button" disabled={busy} onClick={() => onHide(q.id, !q.hidden)} className={actionClass}>
+          <Icon name={q.hidden ? 'eye' : 'x'} />
           {q.hidden ? 'Show' : 'Hide'}
         </button>
         <button
@@ -76,6 +78,7 @@ function QuestionCard({
           onClick={() => onAnswered(q.id, !q.answered)}
           className={actionClass}
         >
+          <Icon name="check" />
           {q.answered ? 'Mark unanswered' : 'Mark answered'}
         </button>
       </div>
@@ -127,46 +130,25 @@ export function QnaPanel({
           aria-checked={qnaOpen}
           disabled={switchPending}
           onClick={() => onToggleQna(!qnaOpen)}
-          className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-slate-500 bg-white transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 aria-checked:bg-brand-600 disabled:opacity-50"
+          className={switchTrackClass}
         >
-          <span
-            aria-hidden="true"
-            className={`inline-block h-5 w-5 rounded-full bg-slate-600 shadow-sm transition-transform duration-150 motion-reduce:transition-none ${
-              qnaOpen ? 'translate-x-6 bg-white' : 'translate-x-1'
-            }`}
-          />
+          <span aria-hidden="true" className={switchThumbClass(qnaOpen)} />
         </button>
         <label htmlFor="qna-switch">
-          Accepting questions <span className="text-sm text-muted">({qnaOpen ? 'On' : 'Off'})</span>
+          Accepting questions <span className={hintClass}>({qnaOpen ? 'On' : 'Off'})</span>
         </label>
       </div>
 
       {actionError ? <StatusMessage kind="error">{actionError}</StatusMessage> : null}
 
-      {status === 'loading' ? (
-        <div role="status" aria-label="Loading questions" className="flex flex-col gap-3">
-          <div className="h-6 w-2/3 animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
-          <div className="h-24 w-full animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
-        </div>
-      ) : null}
+      {status === 'loading' ? <LoadingState label="Loading questions…" rows={2} /> : null}
 
       {status === 'error' ? (
-        <div className="flex flex-col gap-3">
-          <StatusMessage kind="error">{loadError ?? 'We could not load the questions.'}</StatusMessage>
-          <div>
-            <button
-              type="button"
-              onClick={onRetry}
-              className={`${buttonClass} bg-brand-600 text-white enabled:hover:bg-brand-700`}
-            >
-              Try again
-            </button>
-          </div>
-        </div>
+        <ErrorState message={loadError ?? 'We could not load the questions.'} onRetry={onRetry} />
       ) : null}
 
       {status === 'ready' && questions.length === 0 ? (
-        <EmptyState>No questions yet. Participants can ask from their phones.</EmptyState>
+        <EmptyState icon="users">No questions yet. Participants can ask from their phones.</EmptyState>
       ) : null}
 
       {status === 'ready' && visible.length > 0 ? (
@@ -174,22 +156,26 @@ export function QnaPanel({
           <p aria-live="polite" aria-atomic="true" className="text-sm text-muted">
             {visible.length} {visible.length === 1 ? 'question' : 'questions'}
           </p>
+          <ScrollArea label="Questions list" maxHeightClass="max-h-[40rem]">
           <ul className="flex flex-col gap-3">
             {visible.map((q) => (
               <QuestionCard key={q.id} question={q} busy={busyQuestionId === q.id} {...cardProps} />
             ))}
           </ul>
+          </ScrollArea>
         </>
       ) : null}
 
       {status === 'ready' && hidden.length > 0 ? (
         <div className="flex flex-col gap-3">
           <h3 className="text-base font-semibold">Hidden questions</h3>
+          <ScrollArea label="Hidden questions list" maxHeightClass="max-h-96">
           <ul className="flex flex-col gap-3">
             {hidden.map((q) => (
               <QuestionCard key={q.id} question={q} busy={busyQuestionId === q.id} {...cardProps} />
             ))}
           </ul>
+          </ScrollArea>
         </div>
       ) : null}
     </section>

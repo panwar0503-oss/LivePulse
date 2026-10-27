@@ -5,6 +5,7 @@ import { AppError } from '../errors/app-error.js'
 import { generateRoomCode as defaultGenerateRoomCode } from '../lib/room-code.js'
 import { generateToken, hashToken, safeEqualHash } from '../lib/tokens.js'
 import type { Participant, Session } from '../models/index.js'
+import { expireOpenActions } from './ai-actions.service.js'
 import { cancelPendingAiJobs } from './ai-jobs.service.js'
 
 export type SessionModels = { Session: typeof Session; Participant: typeof Participant }
@@ -160,9 +161,31 @@ export async function endSession(
       { replacements: { sessionId }, type: QueryTypes.SELECT, transaction },
     )
     const closedWord = promptRows[0]
+    // Knowledge documents (and, by cascade, their passages) are not kept after the end. Document rows
+    // before jobs, as in knowledge.service; an ingest run in flight finds its document gone and discards.
+    await deps.sequelize.query('DELETE FROM knowledge_documents WHERE session_id = :sessionId', {
+      replacements: { sessionId },
+      transaction,
+    })
+    // Open answer drafts end with the session; approved, rejected and cancelled drafts are kept as they are.
+    // Copilot nodes re-check ACTIVE under FOR SHARE, so none writes a new draft after this commits.
+    await deps.sequelize.query(
+      "UPDATE ai_answer_drafts SET status = 'CANCELLED', updated_at = clock_timestamp() " +
+        "WHERE session_id = :sessionId AND status IN ('DRAFTING', 'PENDING_REVIEW')",
+      { replacements: { sessionId }, transaction },
+    )
+    // A question still being checked is never published by the end: it stays held for the presenter.
+    await deps.sequelize.query(
+      "UPDATE questions SET review_state = 'HELD', updated_at = clock_timestamp() " +
+        "WHERE session_id = :sessionId AND review_state = 'CHECKING'",
+      { replacements: { sessionId }, transaction },
+    )
     // Waiting AI jobs end with the session (lock order: session, then jobs). Jobs already running are
     // left to the runner.
     await cancelPendingAiJobs(deps.sequelize, transaction, sessionId)
+    // Open AI proposals end with the session (lock order: session, then actions). An approval already claimed
+    // (APPROVED) is left to finish; a claim waiting on the session lock sees ENDED and is refused.
+    await expireOpenActions(transaction, sessionId, deps.sequelize)
     return {
       session,
       closedPoll: closed ? { id: closed.id, closedAt: closed.closed_at } : null,

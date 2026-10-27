@@ -4,6 +4,10 @@ import { useState, type FormEvent } from 'react'
 import type { ParticipantWordPrompt as ParticipantWordPromptData } from '@livepulse/shared'
 import { StatusMessage } from '../sessions/StatusMessage'
 import { EmptyState } from '../ui/EmptyState'
+import { ErrorState } from '../ui/ErrorState'
+import { Icon } from '../ui/Icon'
+import { LoadingState } from '../ui/LoadingState'
+import { button, inputLargeClass, motionIn } from '../ui/styles'
 import { WordCloud } from './WordCloud'
 
 export type ParticipantWordPromptProps = {
@@ -18,9 +22,6 @@ export type ParticipantWordPromptProps = {
 
 const WORD_MAX = 30
 
-const buttonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl min-h-11 px-5 font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
-
 export function ParticipantWordPrompt({
   prompt,
   status,
@@ -33,31 +34,13 @@ export function ParticipantWordPrompt({
   const [text, setText] = useState('')
 
   if (status === 'loading') {
-    return (
-      <div role="status" aria-label="Loading word cloud question" className="flex flex-col gap-3">
-        <div className="h-6 w-2/3 animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
-        <div className="h-14 w-full animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
-      </div>
-    )
+    return <LoadingState label="Loading word cloud question" rows={2} />
   }
   if (status === 'error') {
-    return (
-      <div className="flex flex-col gap-3">
-        <StatusMessage kind="error">{loadError ?? 'We could not load the question.'}</StatusMessage>
-        <div>
-          <button
-            type="button"
-            onClick={onRetry}
-            className={`${buttonClass} bg-brand-600 text-white enabled:hover:bg-brand-700`}
-          >
-            Try again
-          </button>
-        </div>
-      </div>
-    )
+    return <ErrorState message={loadError ?? 'We could not load the question.'} onRetry={onRetry} />
   }
   if (!prompt) {
-    return <EmptyState>No word question is open right now.</EmptyState>
+    return <EmptyState icon="chart" title="No question yet">No word question is open right now.</EmptyState>
   }
 
   const closed = prompt.status === 'CLOSED'
@@ -71,8 +54,8 @@ export function ParticipantWordPrompt({
   }
 
   return (
-    <section aria-labelledby="word-prompt-question" className="flex flex-col gap-4 text-left">
-      <h2 id="word-prompt-question" className="text-xl font-semibold tracking-tight break-words">
+    <section aria-labelledby="word-prompt-question" className={`flex flex-col gap-4 text-left ${motionIn}`}>
+      <h2 id="word-prompt-question" className="text-lg font-semibold tracking-tight break-words">
         {prompt.question}
       </h2>
 
@@ -94,7 +77,7 @@ export function ParticipantWordPrompt({
             value={answered ? (prompt.myWord ?? '') : text}
             onChange={(e) => setText(e.target.value)}
             aria-describedby="word-input-count"
-            className="min-h-14 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 text-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-50 disabled:text-muted"
+            className={inputLargeClass}
           />
           {answered ? null : (
             <p id="word-input-count" className="text-sm text-muted">
@@ -109,8 +92,9 @@ export function ParticipantWordPrompt({
             <button
               type="submit"
               disabled={pending || closed}
-              className="min-h-11 rounded-xl bg-brand-600 transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none px-5 font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
+              className={button('primary')}
             >
+              <Icon name="send" />
               {pending ? 'Sending…' : 'Send'}
             </button>
           )}

@@ -9,11 +9,20 @@ import type {
   PresenterQnaResponse,
   PresenterQuestion,
   PublicQuestion,
+  ReviewState,
 } from '@livepulse/shared'
+import { QNA_COPILOT_RESERVE_TOKENS } from '../ai/tasks/qna-copilot.constants.js'
+import type { Env } from '../config/env.js'
 import { AppError } from '../errors/app-error.js'
 import type { Models, Question } from '../models/index.js'
+import { insertAiJobInTx, isAiUsableInTx } from './ai-jobs.service.js'
 
-export type QuestionsDeps = { sequelize: Sequelize; models: Models }
+/** Without `ai` (or when AI cannot run for the session) new questions are VISIBLE at once (fail-open). */
+export type QuestionsDeps = {
+  sequelize: Sequelize
+  models: Models
+  ai?: { env: Pick<Env, 'AI_MAX_ATTEMPTS'>; nudge?: () => void }
+}
 
 export const MAX_QUESTIONS_PER_PARTICIPANT = 5
 
@@ -47,6 +56,7 @@ export type QuestionRow = {
   answerText: string | null
   answeredAt: Date | null
   createdAt: Date
+  reviewState: ReviewState
   upvotes: number
   myUpvote: boolean
 }
@@ -67,21 +77,40 @@ export const toPresenterQuestion = (row: QuestionRow): PresenterQuestion => ({
   hidden: row.hidden,
 })
 
+// What the asker is told about their own question; HELD reads as CHECKING. Missing states are never shown.
+const OWN_STATUS: Partial<Record<ReviewState, NonNullable<ParticipantQuestion['status']>>> = {
+  VISIBLE: 'VISIBLE',
+  CHECKING: 'CHECKING',
+  HELD: 'CHECKING',
+  MERGED: 'MERGED',
+}
+
 /**
  * The ONLY place participant-facing questions are built: hidden questions are refused, and the
  * author is reduced to `mine` for the viewer, so no participant id ever leaves the server.
+ * A question still in review is shown to its asker only, and only the asker's rows carry a status.
  */
 export const toParticipantQuestion = (row: QuestionRow, viewerId: string): ParticipantQuestion => {
   if (row.hidden) throw new Error('A hidden question is never shown to participants')
-  return { ...toPublicQuestion(row), mine: row.participantId === viewerId, myUpvote: row.myUpvote }
+  const mine = row.participantId === viewerId
+  const question = { ...toPublicQuestion(row), mine, myUpvote: row.myUpvote }
+  if (!mine) {
+    if (row.reviewState !== 'VISIBLE') throw new Error('A question in review is shown to its asker only')
+    return question
+  }
+  const status = OWN_STATUS[row.reviewState]
+  if (status === undefined) throw new Error('A rejected question is never shown to participants')
+  return { ...question, status }
 }
 
 // ---------- reads ----------
 
 // Static SQL only; every value is a replacement. The viewer id is a dummy for the presenter (no upvotes).
+// Explicit columns: the embedding (384 numbers) is never read here.
 const QUESTION_SELECT = `
 SELECT q.id, q.participant_id AS "participantId", q.text, q.hidden, q.pinned,
   q.answer_text AS "answerText", q.answered_at AS "answeredAt", q.created_at AS "createdAt",
+  q.review_state AS "reviewState",
   (SELECT COUNT(*)::int FROM question_upvotes u WHERE u.question_id = q.id) AS upvotes,
   EXISTS (SELECT 1 FROM question_upvotes u WHERE u.question_id = q.id AND u.participant_id = :viewerId)
     AS "myUpvote"
@@ -110,10 +139,30 @@ const loadQnaOpen = async (deps: QuestionsDeps, sessionId: string): Promise<bool
   return session.qnaOpen
 }
 
-const loadPresenterQuestion = async (deps: QuestionsDeps, questionId: string): Promise<PresenterQuestion> => {
+export const loadPresenterQuestion = async (
+  deps: QuestionsDeps,
+  questionId: string,
+): Promise<PresenterQuestion> => {
   const [row] = await selectQuestions(deps, 'q.id = :questionId', { questionId })
   if (!row) throw questionNotFound()
   return toPresenterQuestion(row)
+}
+
+/**
+ * One question as the room would see it, for question:created. Only a VISIBLE, unhidden question is public:
+ * CHECKING, HELD, MERGED and REJECTED questions come back as `hidden` so the emitter sends nothing.
+ */
+export const loadRoomQuestion = async (
+  deps: QuestionsDeps,
+  sessionId: string,
+  questionId: string,
+): Promise<{ question: PublicQuestion; hidden: boolean } | null> => {
+  const [row] = await selectQuestions(deps, 'q.session_id = :sessionId AND q.id = :questionId', {
+    sessionId,
+    questionId,
+  })
+  if (!row) return null
+  return { question: toPublicQuestion(row), hidden: row.hidden || row.reviewState !== 'VISIBLE' }
 }
 
 /** Ownership helper: routes take sessionId from the question row, never from the request. */
@@ -121,10 +170,18 @@ export async function loadQuestionWithSession(
   deps: QuestionsDeps,
   questionId: string,
 ): Promise<{ question: Question; sessionId: string }> {
-  const question = await deps.models.Question.findByPk(questionId)
+  // Explicit columns (no embedding); callers re-check visibility under their own lock.
+  const question = await deps.models.Question.findByPk(questionId, {
+    attributes: ['id', 'sessionId', 'participantId', 'hidden', 'reviewState'],
+  })
   if (!question) throw questionNotFound()
   return { question, sessionId: question.sessionId }
 }
+
+// Visible to the room, plus the viewer's own questions still in review (never hidden or rejected ones).
+const PARTICIPANT_VISIBLE =
+  "q.session_id = :sessionId AND q.hidden = false AND (q.review_state = 'VISIBLE' OR " +
+  "(q.participant_id = :viewerId AND q.review_state IN ('CHECKING', 'HELD', 'MERGED')))"
 
 /** Visible questions only (one SQL filter + one mapper). The caller has checked the participant's session. */
 export async function listParticipantQuestions(
@@ -132,7 +189,7 @@ export async function listParticipantQuestions(
   input: { sessionId: string; participantId: string },
 ): Promise<ParticipantQnaResponse> {
   const qnaOpen = await loadQnaOpen(deps, input.sessionId)
-  const rows = await selectQuestions(deps, 'q.session_id = :sessionId AND q.hidden = false', {
+  const rows = await selectQuestions(deps, PARTICIPANT_VISIBLE, {
     sessionId: input.sessionId,
     viewerId: input.participantId,
   })
@@ -154,6 +211,8 @@ export async function listPresenterQuestions(
  * Lock order: session FOR SHARE → participant FOR NO KEY UPDATE → insert. The participant lock makes
  * a second submit from the same participant wait, so its COUNT sees the first one (the 5-question cap).
  * NO KEY UPDATE does not block the KEY SHARE locks taken by foreign-key checks. Emits nothing.
+ * When AI can run for the session, the question waits as CHECKING and its copilot job is inserted in the same
+ * transaction (after the question, under the same session lock); otherwise it is VISIBLE at once (fail-open).
  */
 export async function submitQuestion(
   deps: QuestionsDeps,
@@ -163,7 +222,9 @@ export async function submitQuestion(
   // Defensive: the route validates too, but the stored key must never depend on the caller.
   const text = parseOrThrow(questionTextSchema, input.text, 'Type a question.')
   const { Session, Participant, Question } = deps.models
+  const { ai } = deps
   let created: Question
+  let queued = false
   try {
     created = await deps.sequelize.transaction(async (transaction) => {
       const session = await Session.findByPk(sessionId, { lock: transaction.LOCK.SHARE, transaction })
@@ -182,7 +243,11 @@ export async function submitQuestion(
       if (count >= MAX_QUESTIONS_PER_PARTICIPANT) {
         throw new AppError(409, 'QUESTION_LIMIT_REACHED', 'You can ask up to 5 questions.')
       }
-      return Question.create(
+      // The enqueue's checks, read under the session FOR SHARE lock taken above.
+      const checking =
+        ai !== undefined &&
+        (await isAiUsableInTx(deps.sequelize, transaction, session, QNA_COPILOT_RESERVE_TOKENS))
+      const question = await Question.create(
         {
           sessionId,
           participantId,
@@ -192,9 +257,21 @@ export async function submitQuestion(
           pinned: false,
           answerText: null,
           answeredAt: null,
+          ...(checking ? { reviewState: 'CHECKING' as const, aiStep: 'moderate' } : {}),
         },
         { transaction },
       )
+      if (checking) {
+        const jobDeps = { sequelize: deps.sequelize, models: deps.models, env: ai.env }
+        await insertAiJobInTx(transaction, jobDeps, {
+          sessionId,
+          type: 'QNA_COPILOT',
+          input: { kind: 'qna-copilot', sessionId, questionId: question.id },
+          dedupeKey: `qna:${question.id}`,
+        })
+        queued = true
+      }
+      return question
     })
   } catch (error) {
     // Caught outside the callback: the unique violation has already aborted the transaction.
@@ -205,6 +282,8 @@ export async function submitQuestion(
     }
     throw error
   }
+  // After commit only, as enqueueAiJob does.
+  if (queued) ai?.nudge?.()
   return toParticipantQuestion(
     {
       id: created.id,
@@ -215,6 +294,7 @@ export async function submitQuestion(
       answerText: created.answerText,
       answeredAt: created.answeredAt,
       createdAt: created.createdAt,
+      reviewState: created.reviewState,
       upvotes: 0,
       myUpvote: false,
     },

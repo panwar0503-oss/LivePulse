@@ -2,17 +2,14 @@
 
 import { AI_ERROR_MESSAGES, AI_TASK_NAMES, type AiFailure, type AiState } from '@livepulse/shared'
 import { useAiState } from '../../hooks/use-ai-state'
+import { AiProposals } from './AiProposals'
 import { StatusMessage } from '../sessions/StatusMessage'
 import { Card } from '../ui/Card'
 import { EmptyState } from '../ui/EmptyState'
-import {
-  button,
-  hintClass,
-  itemCardClass,
-  skeletonClass,
-  switchThumbClass,
-  switchTrackClass,
-} from '../ui/styles'
+import { ErrorState } from '../ui/ErrorState'
+import { Icon } from '../ui/Icon'
+import { LoadingState } from '../ui/LoadingState'
+import { button, hintClass, itemCardClass, switchThumbClass, switchTrackClass } from '../ui/styles'
 
 export type AiPanelViewProps = {
   state: AiState | null
@@ -55,22 +52,10 @@ export function AiPanelView({
 }: AiPanelViewProps) {
   return (
     <Card title="AI assistant" headingLevel={2}>
-      {status === 'loading' && !state ? (
-        <div role="status" aria-label="Loading AI settings" className="flex flex-col gap-3">
-          <div className={`${skeletonClass} h-7 w-40`} />
-          <div className={`${skeletonClass} h-5 w-full`} />
-        </div>
-      ) : null}
+      {status === 'loading' && !state ? <LoadingState label="Loading AI settings" rows={2} /> : null}
 
       {status === 'error' && !state ? (
-        <div className="flex flex-col gap-3">
-          <StatusMessage kind="error">{error ?? 'Could not load AI settings.'}</StatusMessage>
-          <div>
-            <button type="button" onClick={onRetry} className={button('secondary', 'sm')}>
-              Try again
-            </button>
-          </div>
-        </div>
+        <ErrorState message={error ?? 'Could not load AI settings.'} onRetry={onRetry} />
       ) : null}
 
       {state ? (
@@ -88,7 +73,7 @@ export function AiPanelView({
               <span aria-hidden="true" className={switchThumbClass(state.enabled)} />
             </button>
             <label htmlFor="ai-switch" className="font-medium text-ink">
-              AI for this session
+              {state.enabled ? 'AI is on' : 'AI is off'}
             </label>
           </div>
 
@@ -112,6 +97,7 @@ export function AiPanelView({
                 onClick={onDiagnostic}
                 className={button('secondary', 'sm')}
               >
+                <Icon name="refresh" />
                 Run diagnostic
               </button>
             </div>
@@ -143,15 +129,18 @@ export type AiPanelProps = { sessionId: string }
 export function AiPanel({ sessionId }: AiPanelProps) {
   const ai = useAiState(sessionId)
   return (
-    <AiPanelView
-      state={ai.state}
-      status={ai.status}
-      pending={ai.pending}
-      error={ai.error}
-      diagnosticQueued={ai.diagnosticQueued}
-      onToggle={ai.toggle}
-      onDiagnostic={ai.runDiagnostic}
-      onRetry={ai.retry}
-    />
+    <>
+      <AiPanelView
+        state={ai.state}
+        status={ai.status}
+        pending={ai.pending}
+        error={ai.error}
+        diagnosticQueued={ai.diagnosticQueued}
+        onToggle={ai.toggle}
+        onDiagnostic={ai.runDiagnostic}
+        onRetry={ai.retry}
+      />
+      <AiProposals sessionId={sessionId} />
+    </>
   )
 }

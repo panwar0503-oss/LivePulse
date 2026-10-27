@@ -41,16 +41,9 @@ describe('presenter dashboard', () => {
 
   it('shows the live count in words people connected right now', () => {
     const html = renderToStaticMarkup(
-      <PresenterDashboard
-        session={session}
-        pending={false}
-        onEnd={noop}
-        connection="connected"
-        liveCount={3}
-      />,
+      <PresenterDashboard session={session} pending={false} onEnd={noop} liveCount={3} />,
     )
-    expect(html).toContain('people connected right now')
-    expect(html).toContain('Connected')
+    expect(html).toContain('3 people here')
     expect(html).toContain('people have joined')
     expect(html).not.toMatch(/online/i)
   })
@@ -70,18 +63,18 @@ describe('presenter dashboard', () => {
     expect(html).toContain('Live updates may be delayed. Refresh if numbers look wrong.')
   })
 
-  it('shows Reconnecting while the connection is down', () => {
-    const html = renderToStaticMarkup(
-      <PresenterDashboard session={session} pending={false} onEnd={noop} connection="reconnecting" />,
-    )
-    expect(html).toContain('Reconnecting…')
+  it('shows the join link, room code and audience link in the side column', () => {
+    const html = renderToStaticMarkup(<PresenterDashboard session={session} pending={false} onEnd={noop} />)
+    expect(html).toContain('http://localhost:3000/join?code=ABCDEF')
+    expect(html).toContain('ABCDEF')
+    expect(html).toContain('Open audience view')
   })
 
-  it('says the connection was refused when the server refuses it', () => {
+  it('links to the session report once the session has ended', () => {
     const html = renderToStaticMarkup(
-      <PresenterDashboard session={session} pending={false} onEnd={noop} connection="refused" />,
+      <PresenterDashboard session={session} pending={false} onEnd={noop} endedLive />,
     )
-    expect(html).toContain('Connection refused')
+    expect(html).toContain(`/host/${session.id}/report`)
   })
 
   it('hides the end control once the session has ended from a live notice', () => {

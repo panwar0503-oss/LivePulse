@@ -62,9 +62,16 @@ export const publicQuestionSchema = z.object({
 export const participantQuestionSchema = publicQuestionSchema.extend({
   mine: z.boolean(),
   myUpvote: z.boolean(),
+  // Present only on the viewer's own rows; optional so older consumers still parse.
+  status: z.enum(['VISIBLE', 'CHECKING', 'MERGED']).optional(),
 })
 
-export const presenterQuestionSchema = publicQuestionSchema.extend({ hidden: z.boolean() })
+export const presenterQuestionSchema = publicQuestionSchema.extend({
+  hidden: z.boolean(),
+  aiStatus: z.string().optional(),
+  moderationLabel: z.string().nullable().optional(),
+  duplicateOfId: z.string().uuid().nullable().optional(),
+})
 
 export const participantQnaResponseSchema = z.object({
   qnaOpen: z.boolean(),

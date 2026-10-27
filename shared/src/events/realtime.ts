@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { aiActionStatusSchema, aiActionTypeSchema } from '../schemas/ai-actions.js'
 import { aiErrorCodeSchema, taskTypeSchema } from '../schemas/ai.js'
+import { knowledgeDocumentStatusSchema, knowledgeFailureReasonSchema } from '../schemas/knowledge.js'
 import { pollOptionDtoSchema, pollResultsSchema } from '../schemas/polls.js'
 import { publicQuestionSchema } from '../schemas/qna.js'
 import { roomCodeSchema } from '../schemas/sessions.js'
@@ -102,6 +104,44 @@ export const aiJobFailedSchema = z.object({
   failedAt: z.string().datetime(),
 })
 
+// Presenter room only. Ids and codes only: never document text or file names.
+export const knowledgeDocumentStatusEventSchema = z.object({
+  documentId: z.string().uuid(),
+  status: knowledgeDocumentStatusSchema,
+  failureReason: knowledgeFailureReasonSchema.nullable(),
+})
+
+// Presenter room only. Ids and status only: suggestion text is fetched over HTTP, never pushed.
+export const pollSuggestionsReadySchema = z
+  .object({
+    sessionId: z.string().uuid(),
+    jobId: z.string().uuid(),
+    status: z.string(),
+  })
+  .strict()
+
+// Presenter room only. Ids only: question and answer text are fetched over HTTP, never pushed.
+export const qnaReviewUpdatedSchema = z
+  .object({
+    sessionId: z.string().uuid(),
+    questionId: z.string().uuid(),
+    draftId: z.string().uuid().nullable(),
+    state: z.string(),
+  })
+  .strict()
+
+// Presenter room only. Ids and enums only: action details are fetched over HTTP, never pushed.
+export const aiActionUpdatedSchema = z
+  .object({
+    sessionId: z.string().uuid(),
+    actionId: z.string().uuid(),
+    type: aiActionTypeSchema,
+    status: aiActionStatusSchema,
+  })
+  .strict()
+
+export const qnaClustersUpdatedSchema = z.object({ sessionId: z.string().uuid() }).strict()
+
 // Handshake auth is chosen by role. Identity (cookie) is checked on the server, never trusted from this payload.
 export const handshakeAuthSchema = z.discriminatedUnion('role', [
   z.object({ role: z.literal('presenter'), sessionId: z.string().uuid() }),
@@ -130,6 +170,11 @@ export type QnaStatus = z.infer<typeof qnaStatusSchema>
 export type AiStatus = z.infer<typeof aiStatusSchema>
 export type AiUsage = z.infer<typeof aiUsageSchema>
 export type AiJobFailed = z.infer<typeof aiJobFailedSchema>
+export type KnowledgeDocumentStatusEvent = z.infer<typeof knowledgeDocumentStatusEventSchema>
+export type PollSuggestionsReady = z.infer<typeof pollSuggestionsReadySchema>
+export type QnaReviewUpdated = z.infer<typeof qnaReviewUpdatedSchema>
+export type QnaClustersUpdated = z.infer<typeof qnaClustersUpdatedSchema>
+export type AiActionUpdated = z.infer<typeof aiActionUpdatedSchema>
 
 export interface ServerToClientEvents {
   'presence:count': (payload: PresenceCount) => void
@@ -150,6 +195,11 @@ export interface ServerToClientEvents {
   'ai:status': (payload: AiStatus) => void
   'ai:usage': (payload: AiUsage) => void
   'ai:job-failed': (payload: AiJobFailed) => void
+  'knowledge:document-status': (payload: KnowledgeDocumentStatusEvent) => void
+  'poll-suggestions:ready': (payload: PollSuggestionsReady) => void
+  'qna:review-updated': (payload: QnaReviewUpdated) => void
+  'qna:clusters-updated': (payload: QnaClustersUpdated) => void
+  'ai-action:updated': (payload: AiActionUpdated) => void
 }
 
 // No client-to-server events in this phase. Any client event name is typed as never.

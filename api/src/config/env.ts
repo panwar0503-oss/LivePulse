@@ -51,9 +51,16 @@ const baseSchema = z.object({
   EMBEDDINGS_PROVIDER: z.enum(['local', 'fake']).default('fake'),
   EMBEDDINGS_MODEL: z.string().min(1).max(200).default('Xenova/all-MiniLM-L6-v2'),
   EMBEDDINGS_DIM: z.coerce.number().int().default(EMBEDDING_DIM),
+  // The local reranker shares the embeddings model cache directory.
+  RERANKER_PROVIDER: z.enum(['fake', 'local']).default('fake'),
+  RERANKER_MODEL: z.string().min(1).max(200).default('Xenova/ms-marco-MiniLM-L-6-v2'),
   AI_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
   AI_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
   AI_SESSION_TOKEN_BUDGET: z.coerce.number().int().min(1).max(10_000_000).default(200_000),
+  // Cosine similarity at or above which a new question is treated as a duplicate of an existing one.
+  QNA_DUPLICATE_SIMILARITY: z.coerce.number().min(0.5).max(1).default(0.9),
+  // Cosine similarity at or above which questions are grouped into the same cluster.
+  QNA_CLUSTER_SIMILARITY: z.coerce.number().min(0.5).max(1).default(0.75),
   // Optional: without it the operator route answers 503.
   OPERATOR_KEY: z.string().min(32).optional(),
 })

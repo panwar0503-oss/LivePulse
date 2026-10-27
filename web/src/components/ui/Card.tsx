@@ -23,7 +23,7 @@ export function Card({ title, description, actions, headingLevel = 2, className 
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             {title === undefined ? null : (
-              <Heading id={headingId} className="text-lg font-semibold tracking-tight text-ink">
+              <Heading id={headingId} className="text-base font-semibold tracking-tight text-ink">
                 {title}
               </Heading>
             )}

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ParticipantMe } from '@livepulse/shared'
 import { ParticipantView } from './ParticipantView'
+import { RoomNotFound } from './RoomNotFound'
 
 const me: ParticipantMe = {
   participant: { displayName: 'Asha' },
@@ -32,7 +33,7 @@ describe('participant view', () => {
 
   it('shows Reconnecting while the connection is down', () => {
     const html = renderToStaticMarkup(<ParticipantView me={me} connection="reconnecting" />)
-    expect(html).toContain('Reconnecting…')
+    expect(html).toContain('Reconnecting')
     expect(html).toContain('Asha')
   })
 
@@ -40,5 +41,24 @@ describe('participant view', () => {
     const html = renderToStaticMarkup(<ParticipantView me={me} connection="refused" />)
     expect(html).toContain('We could not reconnect to this session. Refresh the page or join again.')
     expect(html).not.toContain('TOO_MANY_CONNECTIONS')
+  })
+
+  it('shows the ended sentence once when the session has ended', () => {
+    const html = renderToStaticMarkup(
+      <ParticipantView me={{ ...me, session: { ...me.session, status: 'ENDED' } }} connection="connected" />,
+    )
+    expect(html.split('This session has ended.').length - 1).toBe(1)
+  })
+
+  it('tells a participant the head count is not shown when no live count is available', () => {
+    const html = renderToStaticMarkup(<ParticipantView me={me} connection="connected" />)
+    expect(html).toContain('The number of people here is not shown on this screen.')
+  })
+
+  it('offers a way to join with a code when the session cannot be found', () => {
+    const html = renderToStaticMarkup(<RoomNotFound />)
+    expect(html).toContain('We could not find that session.')
+    expect(html).toContain('href="/join"')
+    expect(html).toContain('Join with a code')
   })
 })

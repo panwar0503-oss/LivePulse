@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { createAnthropicProvider, type ChatModelFactory } from './anthropic-provider.js'
+import { createAnthropicProvider, type ChatModelFactory, type ChatModelLike } from './anthropic-provider.js'
 import { createFakeProvider } from './fake-provider.js'
 import { AiProviderError } from './llm-provider.js'
 import { mapProviderError } from './provider-errors.js'
 
 const input = { system: 's', user: 'u', maxOutputTokens: 10 }
+// complete() never streams; these stubs only need the method to exist.
+const bindTools: ChatModelLike['bindTools'] = () => ({ stream: () => Promise.reject(new Error('not used')) })
 
 describe('providers', () => {
   it('the fake provider answers deterministically and counts its calls', async () => {
@@ -66,6 +68,7 @@ describe('providers', () => {
     const factory: ChatModelFactory = (options) => {
       seen.push(options)
       return {
+        bindTools,
         invoke: () =>
           Promise.resolve({ content: 'hi', usage_metadata: { input_tokens: 5, output_tokens: 2 } }),
       }
@@ -78,11 +81,12 @@ describe('providers', () => {
   })
 
   it('the Anthropic adapter rejects non-text content and maps SDK errors', async () => {
-    const bad: ChatModelFactory = () => ({ invoke: () => Promise.resolve({ content: [] }) })
+    const bad: ChatModelFactory = () => ({ bindTools, invoke: () => Promise.resolve({ content: [] }) })
     await expect(
       createAnthropicProvider({ apiKey: 'k', model: 'm' }, bad).complete(input),
     ).rejects.toMatchObject({ code: 'INVALID_OUTPUT' })
     const limited: ChatModelFactory = () => ({
+      bindTools,
       invoke: () => Promise.reject(Object.assign(new Error('x'), { status: 429 })),
     })
     await expect(

@@ -4,6 +4,19 @@ import { useState } from 'react'
 import type { CreateWordPromptBody, PresenterWordPrompt } from '@livepulse/shared'
 import { StatusMessage } from '../sessions/StatusMessage'
 import { EmptyState } from '../ui/EmptyState'
+import { ErrorState } from '../ui/ErrorState'
+import { Icon } from '../ui/Icon'
+import { LoadingState } from '../ui/LoadingState'
+import { ScrollArea } from '../ui/ScrollArea'
+import {
+  badgeClass,
+  button,
+  itemCardClass,
+  motionIn,
+  summaryClass,
+  switchThumbClass,
+  switchTrackClass,
+} from '../ui/styles'
 import { CreateWordPromptForm } from './CreateWordPromptForm'
 import { WordCloud, answersText } from './WordCloud'
 
@@ -23,9 +36,6 @@ export type WordPromptsPanelProps = {
   onToggleCloud: (promptId: string, showCloud: boolean) => void
 }
 
-const buttonClass =
-  'inline-flex items-center justify-center gap-2 rounded-xl min-h-11 px-5 font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50'
-
 type CloudSwitchProps = {
   prompt: PresenterWordPrompt
   disabled: boolean
@@ -43,13 +53,11 @@ function CloudSwitch({ prompt, disabled, onToggle }: CloudSwitchProps) {
         aria-checked={prompt.showCloud}
         disabled={disabled}
         onClick={() => onToggle(prompt.id, !prompt.showCloud)}
-        className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border border-slate-500 bg-white transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 aria-checked:bg-brand-600 disabled:opacity-50"
+        className={switchTrackClass}
       >
         <span
           aria-hidden="true"
-          className={`inline-block h-5 w-5 rounded-full bg-slate-600 shadow-sm transition-transform duration-150 motion-reduce:transition-none ${
-            prompt.showCloud ? 'translate-x-6 bg-white' : 'translate-x-1'
-          }`}
+          className={switchThumbClass(prompt.showCloud)}
         />
       </button>
       <label htmlFor={id}>
@@ -72,13 +80,13 @@ function OpenCard({ prompt, busy, onClose, onToggleCloud }: OpenCardProps) {
   return (
     <article
       aria-label="Open word cloud"
-      className="flex flex-col gap-4 rounded-2xl border border-line bg-white p-4"
+      className={`${itemCardClass} ${motionIn}`}
     >
       <div className="flex flex-col gap-1">
         <span className="inline-flex w-fit items-center rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-800">
           Open
         </span>
-        <h3 className="text-lg font-semibold break-words">{prompt.question}</h3>
+        <h3 className="text-base font-semibold break-words">{prompt.question}</h3>
       </div>
       <WordCloud cloud={prompt.cloud} />
       <CloudSwitch prompt={prompt} disabled={busy} onToggle={onToggleCloud} />
@@ -90,15 +98,17 @@ function OpenCard({ prompt, busy, onClose, onToggleCloud }: OpenCardProps) {
               type="button"
               disabled={busy}
               onClick={() => onClose(prompt.id)}
-              className={`${buttonClass} bg-danger-700 text-white enabled:hover:bg-danger-800 disabled:bg-slate-400`}
+              className={button('danger')}
             >
+              <Icon name="check" />
               {busy ? 'Closing…' : 'Confirm'}
             </button>
             <button
               type="button"
               onClick={() => setConfirming(false)}
-              className={`${buttonClass} border border-slate-300 bg-white enabled:hover:bg-slate-50`}
+              className={button('secondary')}
             >
+              <Icon name="x" />
               Cancel
             </button>
           </div>
@@ -109,8 +119,9 @@ function OpenCard({ prompt, busy, onClose, onToggleCloud }: OpenCardProps) {
             type="button"
             disabled={busy}
             onClick={() => setConfirming(true)}
-            className={`${buttonClass} border border-danger-200 bg-white text-danger-700 enabled:hover:bg-danger-50`}
+            className={button('dangerSecondary')}
           >
+            <Icon name="stop" />
             Close question
           </button>
         </div>
@@ -147,7 +158,8 @@ export function WordPromptsPanel({
         className="rounded-2xl border border-line bg-white p-4"
         open={prompts.length === 0 && status === 'ready'}
       >
-        <summary className="cursor-pointer rounded-lg font-medium text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+        <summary className={`${summaryClass} inline-flex items-center gap-2`}>
+          <Icon name="plus" />
           Create a word cloud question
         </summary>
         <div className="pt-4">
@@ -163,29 +175,15 @@ export function WordPromptsPanel({
       {actionError ? <StatusMessage kind="error">{actionError}</StatusMessage> : null}
 
       {status === 'loading' ? (
-        <div role="status" aria-label="Loading word clouds" className="flex flex-col gap-3">
-          <div className="h-6 w-2/3 animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
-          <div className="h-40 w-full animate-pulse rounded-xl bg-slate-200 motion-reduce:animate-none" />
-        </div>
+        <LoadingState label="Loading word clouds" rows={2} />
       ) : null}
 
       {status === 'error' ? (
-        <div className="flex flex-col gap-3">
-          <StatusMessage kind="error">{loadError ?? 'We could not load the word clouds.'}</StatusMessage>
-          <div>
-            <button
-              type="button"
-              onClick={onRetry}
-              className={`${buttonClass} bg-brand-600 text-white enabled:hover:bg-brand-700`}
-            >
-              Try again
-            </button>
-          </div>
-        </div>
+        <ErrorState message={loadError ?? 'We could not load the word clouds.'} onRetry={onRetry} />
       ) : null}
 
       {status === 'ready' && prompts.length === 0 ? (
-        <EmptyState>No word clouds yet. Create your first question.</EmptyState>
+        <EmptyState icon="chart" title="No word clouds yet">No word clouds yet. Create your first question.</EmptyState>
       ) : null}
 
       {status === 'ready' && open ? (
@@ -198,12 +196,13 @@ export function WordPromptsPanel({
       ) : null}
 
       {status === 'ready' && others.length > 0 ? (
+        <ScrollArea label="Other word clouds" maxHeightClass="max-h-[32rem]">
         <ul className="flex flex-col gap-3">
           {others.map((prompt) => (
-            <li key={prompt.id} className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4">
+            <li key={prompt.id} className={itemCardClass}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold break-words">{prompt.question}</h3>
-                <span className="inline-flex w-fit items-center rounded-full border border-slate-300 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-muted">
+                <span className={badgeClass}>
                   {prompt.status === 'DRAFT' ? 'Draft' : 'Closed'}
                 </span>
               </div>
@@ -219,8 +218,9 @@ export function WordPromptsPanel({
                       type="button"
                       disabled={busyPromptId === prompt.id}
                       onClick={() => onOpen(prompt.id)}
-                      className={`${buttonClass} bg-brand-600 text-white enabled:hover:bg-brand-700 disabled:bg-slate-400`}
+                      className={button('primary')}
                     >
+                      <Icon name="play" />
                       {busyPromptId === prompt.id ? 'Opening…' : 'Open'}
                     </button>
                   </div>
@@ -239,6 +239,7 @@ export function WordPromptsPanel({
             </li>
           ))}
         </ul>
+        </ScrollArea>
       ) : null}
     </section>
   )

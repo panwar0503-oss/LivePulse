@@ -2,7 +2,7 @@ import type { PublicQuestion, QuestionUpvotes } from '@livepulse/shared'
 import type { Logger } from 'pino'
 import { describeError } from '../db/redis.js'
 import { upvotesFor } from '../services/question-upvotes.service.js'
-import { listPresenterQuestions, type QuestionsDeps } from '../services/questions.service.js'
+import { loadRoomQuestion, type QuestionsDeps } from '../services/questions.service.js'
 import { sessionRoom, type RealtimeServer } from './socket-auth.js'
 
 export const UPVOTES_COMBINE_MS = 250
@@ -39,26 +39,14 @@ export type QuestionEmitters = {
   clearQuestionTimers: () => void
 }
 
-/** Reads through the presenter list so the one mapper is reused; `hidden` is split off before sending. */
+/**
+ * One public-DTO read, scoped to the session. `hidden` is true for a hidden question and for any question the
+ * room may not see yet (CHECKING, HELD) or ever (MERGED, REJECTED), so question:created never carries its text.
+ */
 export const createLoadQuestion =
   (deps: QuestionsDeps): LoadQuestion =>
-  async (sessionId, questionId) => {
-    const { questions } = await listPresenterQuestions(deps, sessionId)
-    const found = questions.find((q) => q.id === questionId)
-    if (!found) return null
-    // Explicit fields: nothing beyond the public DTO can ride along.
-    const question: PublicQuestion = {
-      id: found.id,
-      text: found.text,
-      upvotes: found.upvotes,
-      pinned: found.pinned,
-      answered: found.answered,
-      answerText: found.answerText,
-      answeredAt: found.answeredAt,
-      createdAt: found.createdAt,
-    }
-    return { question, hidden: found.hidden }
-  }
+  (sessionId, questionId) =>
+    loadRoomQuestion(deps, sessionId, questionId)
 
 export const createLoadQuestionUpvotes =
   (deps: QuestionsDeps): LoadQuestionUpvotes =>

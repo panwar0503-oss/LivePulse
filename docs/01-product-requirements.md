@@ -85,11 +85,11 @@ Do not copy StreamAlive branding, assets, code, or exact page designs.
 
 Frontend:
 - `/` — landing
-- `/create` — create session (shows room code, join link, presenter key once)
+- `/host` — create session (shows room code, join link, presenter key once)
 - `/join` — enter room code + name
-- `/presenter/[sessionId]` — live control room: polls, word cloud, Q&A, reactions, **AI panel**
-- `/presenter/[sessionId]/knowledge` — upload/manage session material
-- `/session/[roomCode]` — participant experience
+- `/host/[sessionId]` — live control room: polls, word cloud, Q&A, reactions, **AI panel**
+- `/host/[sessionId]/knowledge` — upload/manage session material
+- `/room/[roomCode]` — participant experience
 - `/results/[sessionId]` — final results + AI report + "Ask your session"
 
 Backend:

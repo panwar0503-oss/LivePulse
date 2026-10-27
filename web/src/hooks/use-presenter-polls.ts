@@ -51,6 +51,12 @@ export const usePresenterPolls = (sessionId: string): UsePresenterPollsResult =>
     }
   }, [refresh])
 
+  // An approved CREATE_POLL adds a poll the presenter has not loaded yet.
+  const { aiActionUpdated } = connection
+  useEffect(() => {
+    if (aiActionUpdated?.type === 'CREATE_POLL' && aiActionUpdated.status === 'EXECUTED') refresh()
+  }, [aiActionUpdated, refresh])
+
   const live = connection.pollResults
   const polls = useMemo(
     () =>

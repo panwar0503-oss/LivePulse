@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
     config.resolve.extensionAlias = { ...config.resolve.extensionAlias, '.js': ['.ts', '.tsx', '.js'] }
     return config
   },
+  // Old bookmarks and shared links keep working after the route rename. /join is unchanged.
+  async redirects() {
+    return [
+      { source: '/create', destination: '/host', permanent: true },
+      { source: '/presenter/:path*', destination: '/host/:path*', permanent: true },
+      { source: '/session/:roomCode', destination: '/room/:roomCode', permanent: true },
+    ]
+  },
 }
 
 export default nextConfig

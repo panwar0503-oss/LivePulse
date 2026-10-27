@@ -220,7 +220,7 @@ docs/hindi-guide/stage-NN-<name>.md      उदाहरण: stage-03-sessions-a
    shared schema → migration → model → service → route/controller → web page।
    उदाहरण (sessions-and-join): `shared/src/schemas/sessions.ts` → `api/migrations/20261024034903-create-sessions-and-participants.cjs`
    → `api/src/models/` → `api/src/services/sessions.service.ts`, `participants.service.ts` → `api/src/routes/sessions.routes.ts`
-   → `web/src/app/create/`, `web/src/app/join/`।
+   → `web/src/app/host/`, `web/src/app/join/`।
 4. **ज़रूरी फ़ैसले और क्यों** — Key decisions + Decisions खंड से।
 5. **Tests** — कौन सा test किस business behaviour को जाँचता है।
 6. **क्या verify नहीं हुआ / risks** — Issues & updates से, ईमानदारी से।

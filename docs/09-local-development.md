@@ -9,6 +9,9 @@ provider works offline) · Claude Desktop (MCP demo).
 node --version && npm --version && docker compose version && git --version
 ```
 
+Node version: the PDF library `unpdf` needs Node 22.18 or later. The root `package.json` `engines` field still says
+`>=20`. Open item: decide whether to raise `engines` to match; it is not changed in this phase.
+
 ## Docker Compose services (Phase 2)
 
 - `postgres`: image `pgvector/pgvector:pg16` (PostgreSQL with pgvector), named volume, health check.
@@ -40,14 +43,14 @@ EMBEDDINGS_MODEL=Xenova/all-MiniLM-L6-v2
 AI_SESSION_TOKEN_BUDGET=200000
 AI_MAX_CONCURRENCY=2
 AI_MAX_ATTEMPTS=3
-AI_INSIGHTS_INTERVAL_SECONDS=15
-RAG_MIN_SIMILARITY=0.35
-KNOWLEDGE_MAX_UPLOAD_MB=10
+RERANKER_PROVIDER=fake           # fake | local (knowledge search; fake is the default)
+RERANKER_MODEL=Xenova/ms-marco-MiniLM-L-6-v2  # used when RERANKER_PROVIDER=local
 OPERATOR_KEY=                    # optional; at least 32 characters; enables PATCH /api/ops/ai
 
-# MCP (Phase 15) — set in the Claude Desktop MCP config, not here
+# MCP (Phase 15) — set in the Claude Desktop or Claude Code MCP config, not here. Setup: docs/guides/mcp-claude-desktop-setup.md
 # LIVEPULSE_API_URL=http://localhost:4000
-# LIVEPULSE_PRESENTER_KEY=
+# LIVEPULSE_SESSION_ID=<your-session-id>
+# LIVEPULSE_PRESENTER_KEY=<your-presenter-key>
 ```
 
 Env is validated with Zod at startup; missing/invalid values fail fast with a clear message (no secret values
@@ -55,6 +58,11 @@ printed). `ANTHROPIC_API_KEY` is required only when `AI_PROVIDER=anthropic`.
 
 Local embeddings cache: the first use of `EMBEDDINGS_PROVIDER=local` downloads `Xenova/all-MiniLM-L6-v2` (about 23 MB)
 into `api/.cache/models`. That folder is git-ignored. Later runs work offline.
+
+Reranker cache: the first use of `RERANKER_PROVIDER=local` downloads `Xenova/ms-marco-MiniLM-L-6-v2` (about 23 MB,
+quantized) once into the same `api/.cache/models` folder. If the reranker fails, knowledge search still returns results in
+fusion order with `reranked: false`. The minimum score is a constant per reranker (see `02-architecture.md`), not an
+env setting; the upload limit is a constant too (10 MB per file, 20 per session).
 
 ## Scripts
 

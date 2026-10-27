@@ -8,6 +8,7 @@ import { loadEnv, type Env } from './config/env.js'
 import { createLogger } from './config/logger.js'
 import { createRedisClients, REDIS_STARTUP_ERROR } from './db/redis.js'
 import { createSequelize } from './db/sequelize.js'
+import { createKnowledgeServices } from './knowledge/startup.js'
 import { initModels } from './models/index.js'
 import { createRealtime } from './realtime/index.js'
 import { createLoadPollResults } from './realtime/polls.js'
@@ -81,6 +82,12 @@ const main = async (): Promise<void> => {
     loadQuestion: createLoadQuestion({ sequelize, models }),
     loadQuestionUpvotes: createLoadQuestionUpvotes({ sequelize, models }),
   })
+  // Extractor by file type, embeddings and reranker from env; shared by the ingest task and search.
+  const knowledge = createKnowledgeServices({
+    env,
+    sequelize,
+    emitKnowledgeStatus: realtime.knowledge.emitDocumentStatus,
+  })
   // Before any request: sets the global AI switch, selects the provider, recovers stale jobs, starts the runner.
   const ai = await startAi({
     env,
@@ -89,6 +96,9 @@ const main = async (): Promise<void> => {
     logger,
     emit: realtime.ai.onRunnerEvent,
     emitAiState: realtime.ai.onAiStateChanged,
+    emitQnaReview: realtime.qnaCopilot.emitQnaReview,
+    emitQnaRoom: realtime.qnaCopilot.onCopilotRoomEvent,
+    taskDeps: knowledge.taskDeps,
   })
   const app = createApp({
     env,
@@ -103,7 +113,13 @@ const main = async (): Promise<void> => {
       wordCloud: realtime.wordCloud,
       questions: realtime.questions,
     },
-    ai: ai.app,
+    ai: {
+      ...ai.app,
+      emitPollSuggestionsReady: realtime.ai.emitPollSuggestionsReady,
+      emitAiActionUpdated: realtime.ai.emitAiActionUpdated,
+      emitAiUsage: ({ sessionId, ...usage }) => realtime.ai.emitAiUsage(sessionId, usage),
+    },
+    knowledge: knowledge.app,
   })
   httpServer.on('request', app)
   httpServer.listen(env.PORT, () => {

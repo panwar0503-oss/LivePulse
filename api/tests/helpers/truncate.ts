@@ -3,7 +3,7 @@ import { assertTestDatabaseUrl } from './test-db.js'
 
 // Fixed table names, never user input. CASCADE also clears rows that reference these tables.
 const TRUNCATE_SQL =
-  'TRUNCATE TABLE ai_jobs, question_upvotes, questions, word_responses, word_prompts, votes, poll_options, polls, participants, sessions RESTART IDENTITY CASCADE'
+  'TRUNCATE TABLE knowledge_passages, knowledge_documents, ai_answer_drafts, ai_jobs, question_upvotes, questions, question_clusters, word_responses, word_prompts, votes, poll_options, polls, participants, session_chat_turns, ai_actions, sessions RESTART IDENTITY CASCADE'
 
 export const truncateAll = async (sequelize: Sequelize): Promise<void> => {
   // Re-checked at call time so a misconfigured run can never wipe a non-test database.

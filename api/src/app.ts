@@ -18,7 +18,20 @@ import { createWordPromptsRouter } from './routes/word-prompts.routes.js'
 import type { Models } from './models/index.js'
 import { createAiRouter } from './routes/ai.routes.js'
 import { createAiOperatorRouter } from './routes/ai-operator.routes.js'
+import { createAiActionsRouter } from './routes/ai-actions.routes.js'
+import type { AiActionEmit } from './services/ai-actions.service.js'
+import { createSessionReportRouter } from './routes/session-report.routes.js'
 import type { AiStateNotice } from './services/ai-jobs.service.js'
+import { KNOWLEDGE_LIMITS, type AiUsage, type QnaReviewUpdated } from '@livepulse/shared'
+import type { LlmProvider } from './ai/providers/llm-provider.js'
+import { getGlobalAiEnabled } from './services/ai-jobs.service.js'
+import { createQnaCopilotRouter } from './routes/qna-copilot.routes.js'
+import type { EmbeddingsProvider } from './ai/embeddings/index.js'
+import type { Reranker } from './knowledge/reranker/index.js'
+import { createKnowledgeRouter } from './routes/knowledge.routes.js'
+import { createPollSuggestionsRouter } from './routes/poll-suggestions.routes.js'
+import type { KnowledgeStatusNotice } from './services/knowledge.service.js'
+import type { PollSuggestionsReadyNotice } from './services/poll-suggestions.service.js'
 
 /** AI routes are mounted only when this is given (server wiring passes it; see task 13). */
 export type AppAi = {
@@ -27,8 +40,26 @@ export type AppAi = {
   nudge?: () => void
   /** Presenter-room notice after a switch change commits. */
   emitAiState?: (notice: AiStateNotice) => void
+  /** Presenter-room notice when a poll-suggestions request is created. */
+  emitPollSuggestionsReady?: (notice: PollSuggestionsReadyNotice) => void
+  /** Presenter-room notice after a review action commits. */
+  emitQnaReview?: (payload: QnaReviewUpdated) => void
   /** From AI_SESSION_TOKEN_BUDGET; new sessions get it as their budget. */
   aiSessionTokenBudget?: number
+  /** The provider the runner uses; "Ask your session" chat routes are mounted only when it is given. */
+  provider?: LlmProvider
+  /** Presenter-room ai:usage after a chat turn settles. */
+  emitAiUsage?: (usage: AiUsage) => void
+  /** Presenter-room notice after an AI action changes state (after commit). */
+  emitAiActionUpdated?: AiActionEmit
+}
+
+/** Knowledge routes are mounted only with both this and `ai` (uploads run as AI jobs). */
+export type AppKnowledge = {
+  embeddings: EmbeddingsProvider
+  reranker: Reranker
+  /** Presenter-room document status notice, after commit. */
+  emitStatus?: (notice: KnowledgeStatusNotice) => void
 }
 
 // Type-only import: app.ts never loads the realtime module, so there is no runtime cycle.
@@ -55,6 +86,7 @@ export type AppDeps = {
   /** Tests inject a small value; production uses the router default (300). */
   questionUpvoteLimitPerMinute?: number
   ai?: AppAi
+  knowledge?: AppKnowledge
 }
 
 export const createApp = ({
@@ -69,6 +101,7 @@ export const createApp = ({
   questionSubmitLimitPerMinute,
   questionUpvoteLimitPerMinute,
   ai,
+  knowledge,
 }: AppDeps): Express => {
   const app = express()
   app.disable('x-powered-by')
@@ -80,6 +113,7 @@ export const createApp = ({
   app.use(helmet())
   // Cookies carry identity, so credentials are allowed — only for the explicit origin list, never '*'.
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }))
+  // JSON only: knowledge upload bodies (PDF, plain text) are left unread here; that route parses its own.
   app.use(express.json({ limit: '100kb' }))
 
   // Ops endpoints live at the root, not under /api.
@@ -127,6 +161,7 @@ export const createApp = ({
     createQuestionsRouter({
       sequelize,
       models,
+      ai: ai ? { env: ai.env, nudge: ai.nudge } : undefined,
       realtime,
       logger,
       allowedOrigins: env.WEB_ORIGIN,
@@ -149,6 +184,22 @@ export const createApp = ({
     )
     app.use(
       '/api',
+      createSessionReportRouter({
+        sequelize,
+        models,
+        allowedOrigins: env.WEB_ORIGIN,
+        chat: ai.provider
+          ? {
+              provider: ai.provider,
+              globalAiEnabled: getGlobalAiEnabled,
+              logger,
+              emit: ai.emitAiUsage,
+            }
+          : undefined,
+      }),
+    )
+    app.use(
+      '/api',
       createAiOperatorRouter({
         sequelize,
         emitAiState: ai.emitAiState,
@@ -156,6 +207,57 @@ export const createApp = ({
         operatorKey: ai.env.OPERATOR_KEY,
       }),
     )
+    // Suggestions read passages already stored; without knowledge routes a request is refused as having none.
+    app.use(
+      '/api',
+      createPollSuggestionsRouter({
+        sequelize,
+        models,
+        env: ai.env,
+        nudge: ai.nudge,
+        emitReady: ai.emitPollSuggestionsReady,
+        allowedOrigins: env.WEB_ORIGIN,
+      }),
+    )
+    app.use(
+      '/api',
+      createAiActionsRouter({
+        sequelize,
+        models,
+        logger,
+        realtime,
+        ai: { env: ai.env, nudge: ai.nudge },
+        emitAiActionUpdated: ai.emitAiActionUpdated ?? (() => undefined),
+        allowedOrigins: env.WEB_ORIGIN,
+      }),
+    )
+    app.use(
+      '/api',
+      createQnaCopilotRouter({
+        sequelize,
+        models,
+        emitReview: ai.emitQnaReview,
+        emitQuestionCreated: realtime.questions.emitQuestionCreated,
+        emitQuestionUpdated: realtime.questions.emitQuestionUpdated,
+        allowedOrigins: env.WEB_ORIGIN,
+      }),
+    )
+    if (knowledge) {
+      app.use(
+        '/api',
+        createKnowledgeRouter({
+          sequelize,
+          models,
+          env: ai.env,
+          nudge: ai.nudge,
+          emitStatus: knowledge.emitStatus,
+          embeddings: knowledge.embeddings,
+          reranker: knowledge.reranker,
+          limits: KNOWLEDGE_LIMITS,
+          allowedOrigins: env.WEB_ORIGIN,
+        }),
+      )
+    }
   }
 
   app.use(notFound)

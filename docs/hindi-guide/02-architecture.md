@@ -2,7 +2,7 @@
 
 > स्रोत: `CLAUDE.md`, `api/src/app.ts`, `api/src/server.ts`, `api/src/routes/sessions.routes.ts`,
 > `api/src/controllers/sessions.controller.ts`, `api/src/services/sessions.service.ts`,
-> `web/src/app/create/page.tsx`, `web/src/lib/api/sessions.ts`, `docker-compose.yml`,
+> `web/src/app/host/page.tsx`, `web/src/lib/api/sessions.ts`, `docker-compose.yml`,
 > `requirements/*/planning-tracking.md`।
 
 ## 1. तीन हिस्से (Monorepo)
@@ -11,7 +11,7 @@
 
 | Workspace | Tech | ज़िम्मेदारी |
 |---|---|---|
-| `web/` | Next.js 15 (App Router) + React + TypeScript + Tailwind v4 | Browser में दिखने वाले pages: `/`, `/create`, `/join`, `/presenter/[sessionId]`, `/session/[roomCode]` |
+| `web/` | Next.js 15 (App Router) + React + TypeScript + Tailwind v4 | Browser में दिखने वाले pages: `/`, `/host`, `/join`, `/host/[sessionId]`, `/room/[roomCode]` |
 | `api/` | Express 5 + TypeScript + Sequelize + PostgreSQL (+ Redis) | HTTP API, business rules, database, security |
 | `shared/` | Zod schemas | API और web दोनों के लिए एक ही "contract" — request/response की shape (जैसे `createSessionBodySchema`, `ROOM_CODE_ALPHABET`) |
 
@@ -76,7 +76,7 @@ requestId → requestLogger → helmet() → cors({origin: WEB_ORIGIN, credentia
 ## 6. Step-by-step उदाहरण: "Create session" बटन दबाने पर
 
 ```
-Browser                Next.js (/create)          Express api                         PostgreSQL
+Browser                Next.js (/host)            Express api                         PostgreSQL
   |  click Create  ──►  CreatePage.handleSubmit
   |                     createSession(values)
   |                     lib/api/sessions.ts
@@ -92,7 +92,7 @@ Browser                Next.js (/create)          Express api                   
 
 विस्तार से:
 
-1. **Browser → Next.js page.** `/create` page (`web/src/app/create/page.tsx`) एक Client Component है
+1. **Browser → Next.js page.** `/host` page (`web/src/app/host/page.tsx`) एक Client Component है
    (`'use client'`), क्योंकि इसमें form state है। Submit पर `handleSubmit` चलता है।
 2. **`lib/api` client.** `createSession(values)` (`web/src/lib/api/sessions.ts`) एक साझा `request()` function बुलाता है।
 3. **`fetch`.** `POST {apiBaseUrl}/api/sessions`, `Content-Type: application/json`, `credentials: 'include'`

@@ -78,7 +78,7 @@
 |---|---|---|
 | **SSR** (Server-Side Rendering) | HTML server पर बनकर browser को आता है | Next.js का default |
 | **Server Component** | सिर्फ server पर चलने वाला React component (state/effects नहीं) | Next.js App Router में default |
-| **Client Component** | Browser में चलने वाला component; फ़ाइल के ऊपर `'use client'` | `web/src/app/create/page.tsx` (form state) |
+| **Client Component** | Browser में चलने वाला component; फ़ाइल के ऊपर `'use client'` | `web/src/app/host/page.tsx` (form state) |
 | **App Router** | Next.js का folder-आधारित routing (`src/app/`) | `web/src/app/join/page.tsx` → `/join` |
 | **`NEXT_PUBLIC_*`** | वे env variables जो browser तक पहुँचते हैं — public मानें | `NEXT_PUBLIC_API_URL` |
 | **Tailwind** | Utility CSS classes | `className="mx-auto max-w-xl"` |

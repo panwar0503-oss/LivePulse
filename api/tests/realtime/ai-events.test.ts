@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { AI_ERROR_MESSAGES, AI_TASK_NAMES } from '@livepulse/shared'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createAiRunner, type AiRunner } from '../../src/ai/runner.js'
+import { createFakeProvider } from '../../src/ai/providers/fake-provider.js'
 import type { LlmProvider } from '../../src/ai/providers/llm-provider.js'
 import {
   enqueueAiJob,
@@ -30,6 +31,7 @@ const provider = (complete: LlmProvider['complete']): LlmProvider => ({
   name: 'fake',
   model: 'fake-1',
   complete,
+  converse: createFakeProvider().converse,
 })
 
 const succeeding = provider(() =>

@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from 'react'
 import { createWordPromptBodySchema, type CreateWordPromptBody } from '@livepulse/shared'
 import { StatusMessage } from '../sessions/StatusMessage'
+import { Icon } from '../ui/Icon'
+import { button, checkboxClass, inputClass } from '../ui/styles'
 
 export type CreateWordPromptFormProps = {
   pending: boolean
@@ -47,7 +49,7 @@ export function CreateWordPromptForm({ pending, error, fieldErrors, onSubmit }: 
           onChange={(e) => setQuestion(e.target.value)}
           aria-invalid={questionError ? true : undefined}
           aria-describedby={questionError ? 'word-question-count word-question-error' : 'word-question-count'}
-          className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          className={inputClass}
         />
         <p id="word-question-count" className="text-sm text-muted">
           {question.length}/{QUESTION_MAX} characters
@@ -64,7 +66,7 @@ export function CreateWordPromptForm({ pending, error, fieldErrors, onSubmit }: 
           type="checkbox"
           checked={showCloud}
           onChange={(e) => setShowCloud(e.target.checked)}
-          className="h-5 w-5 accent-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          className={checkboxClass}
         />
         Show cloud to participants
       </label>
@@ -72,8 +74,9 @@ export function CreateWordPromptForm({ pending, error, fieldErrors, onSubmit }: 
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
+        className={button('primary')}
       >
+        <Icon name="plus" />
         {pending ? 'Creating…' : 'Create word cloud'}
       </button>
     </form>

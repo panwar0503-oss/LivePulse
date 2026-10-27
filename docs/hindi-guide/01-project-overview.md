@@ -101,10 +101,10 @@ audience (दर्शक) अपने browser से एक room code डा�
 
 **अभी (Phase 3 तक), browser में:**
 1. Landing page `/` पर "Create session" और "Join session"।
-2. `/create` पर title डालें → room code, join link और presenter key (एक बार) दिखेंगे।
-3. दूसरे browser में `/join` पर code + नाम डालें → `/session/[roomCode]` पर पहुँचें।
+2. `/host` पर title डालें → room code, join link और presenter key (एक बार) दिखेंगे।
+3. दूसरे browser में `/join` पर code + नाम डालें → `/room/[roomCode]` पर पहुँचें।
 4. Refresh करें → पहचान बनी रहती है।
-5. `/presenter/[sessionId]` dashboard पर joined count (page refresh पर update होता है — live नहीं)।
+5. `/host/[sessionId]` dashboard पर joined count (page refresh पर update होता है — live नहीं)।
 6. "End session" → नया join मना हो जाता है, generic "not found or not open" message के साथ।
 7. Ops: `curl localhost:4000/health` और `/ready`; Redis रोकने पर `/ready` 503 देता है।
 

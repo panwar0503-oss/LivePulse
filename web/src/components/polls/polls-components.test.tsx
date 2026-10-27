@@ -48,7 +48,7 @@ describe('poll components', () => {
   it('shows the open poll with its options as large buttons', () => {
     const html = renderToStaticMarkup(<ParticipantPoll {...participantProps} poll={participantPoll} />)
     expect(html).toContain('Tea or coffee?')
-    expect(html).toContain('min-h-14')
+    expect(html).toContain('min-h-12')
     expect(html).toContain('w-full')
     expect(html.match(/<button/g)).toHaveLength(2)
     expect(html).not.toContain('disabled=""')

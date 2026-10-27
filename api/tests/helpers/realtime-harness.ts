@@ -5,7 +5,7 @@ import type { ServerToClientEvents } from '@livepulse/shared'
 import { pino, type Logger } from 'pino'
 import type { Sequelize } from 'sequelize'
 import { io as connect, type Socket } from 'socket.io-client'
-import { createApp, type AppRealtime } from '../../src/app.js'
+import { createApp, type AppAi, type AppRealtime } from '../../src/app.js'
 import { createRedisClients, type RedisClients } from '../../src/db/redis.js'
 import { generateRoomCode } from '../../src/lib/room-code.js'
 import { hashToken, generateToken } from '../../src/lib/tokens.js'
@@ -64,6 +64,8 @@ export type HarnessOptions = {
   wordCloudCombineMs?: number
   /** Shorter upvote-count combining window so tests stay fast. */
   questionCombineMs?: number
+  /** AI config for the mounted app, built from this server's realtime emitters. */
+  appAi?: (realtime: Realtime) => AppAi
 }
 
 export const startRealtimeServer = async (
@@ -78,6 +80,7 @@ export const startRealtimeServer = async (
     pollCombineMs,
     wordCloudCombineMs,
     questionCombineMs,
+    appAi,
   }: HarnessOptions = {},
 ): Promise<RealtimeHarness> => {
   const sequelize = createTestSequelize()
@@ -112,6 +115,7 @@ export const startRealtimeServer = async (
       sequelize,
       models,
       realtime: appRealtime?.(realtime) ?? realtime,
+      ai: appAi?.(realtime),
     })
     httpServer.on('request', app)
   }

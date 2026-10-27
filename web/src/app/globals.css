@@ -42,9 +42,38 @@
   --color-danger-700: #be123c;
   --color-danger-800: #9f1239;
   --color-danger-900: #881337;
+
+  --animate-fade-in: fade-in 180ms ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* Hides the bar but keeps wheel, touch and keyboard scrolling. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {
+  html {
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar {
+    display: none;
+  }
+
   body {
     background-color: #f8fafc;
     background-image: radial-gradient(60rem 28rem at 50% -12rem, rgb(219 234 254 / 0.75), transparent 70%);
@@ -63,5 +92,16 @@
   :focus-visible {
     outline: 2px solid #2563eb;
     outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

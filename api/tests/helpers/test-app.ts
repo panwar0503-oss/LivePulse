@@ -1,7 +1,7 @@
 import type { Express } from 'express'
 import { pino, type Logger } from 'pino'
 import { Sequelize } from 'sequelize'
-import { createApp, type AppAi, type AppRealtime } from '../../src/app.js'
+import { createApp, type AppAi, type AppKnowledge, type AppRealtime } from '../../src/app.js'
 import { initModels } from '../../src/models/index.js'
 import type { ReadinessChecker } from '../../src/services/readiness.service.js'
 import { assertTestDatabaseUrl } from './test-db.js'
@@ -53,6 +53,7 @@ export const buildTestApp = (
   logger: Logger = pino({ level: 'silent' }),
   realtime: AppRealtime = noopRealtime,
   ai: AppAi = testAi,
+  knowledge?: AppKnowledge,
 ): Express =>
   createApp({
     env: { NODE_ENV: 'test', WEB_ORIGIN: [WEB_ORIGIN], TRUST_PROXY: false },
@@ -62,4 +63,5 @@ export const buildTestApp = (
     models: initModels(sequelize),
     realtime,
     ai,
+    knowledge,
   })

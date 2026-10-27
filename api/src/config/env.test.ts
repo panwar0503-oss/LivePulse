@@ -137,10 +137,47 @@ describe('AI configuration', () => {
     expect(() => loadEnv({ ...validEnv, EMBEDDINGS_DIM: '768' })).toThrow(/EMBEDDINGS_DIM/)
   })
 
+  it('uses the fake reranker and the documented reranker model by default', () => {
+    expect(loadEnv(validEnv)).toMatchObject({
+      RERANKER_PROVIDER: 'fake',
+      RERANKER_MODEL: 'Xenova/ms-marco-MiniLM-L-6-v2',
+    })
+    expect(loadEnv({ ...validEnv, RERANKER_PROVIDER: 'local' }).RERANKER_PROVIDER).toBe('local')
+  })
+
+  it('refuses an unknown reranker provider', () => {
+    expect(() => loadEnv({ ...validEnv, RERANKER_PROVIDER: 'remote' })).toThrow(/RERANKER_PROVIDER/)
+  })
+
   it('refuses AI limits outside their ranges', () => {
     expect(() => loadEnv({ ...validEnv, AI_MAX_CONCURRENCY: '17' })).toThrow(/AI_MAX_CONCURRENCY/)
     expect(() => loadEnv({ ...validEnv, AI_MAX_ATTEMPTS: '0' })).toThrow(/AI_MAX_ATTEMPTS/)
     expect(() => loadEnv({ ...validEnv, AI_SESSION_TOKEN_BUDGET: '0' })).toThrow(/AI_SESSION_TOKEN_BUDGET/)
+  })
+
+  it('the Q&A similarity thresholds use their defaults', () => {
+    expect(loadEnv(validEnv)).toMatchObject({
+      QNA_DUPLICATE_SIMILARITY: 0.9,
+      QNA_CLUSTER_SIMILARITY: 0.75,
+    })
+  })
+
+  it('a threshold outside its range is refused and only the key name is shown', () => {
+    let message = ''
+    try {
+      loadEnv({ ...validEnv, QNA_DUPLICATE_SIMILARITY: '1.5' })
+    } catch (error) {
+      message = error instanceof Error ? error.message : ''
+    }
+    expect(message).toBe('Invalid environment configuration: QNA_DUPLICATE_SIMILARITY')
+    expect(() => loadEnv({ ...validEnv, QNA_CLUSTER_SIMILARITY: '0.4' })).toThrow(/QNA_CLUSTER_SIMILARITY/)
+  })
+
+  it('a threshold given as text is refused', () => {
+    expect(() => loadEnv({ ...validEnv, QNA_DUPLICATE_SIMILARITY: 'high' })).toThrow(
+      /QNA_DUPLICATE_SIMILARITY/,
+    )
+    expect(() => loadEnv({ ...validEnv, QNA_CLUSTER_SIMILARITY: 'high' })).toThrow(/QNA_CLUSTER_SIMILARITY/)
   })
 
   it('error messages name AI keys but never their values', () => {

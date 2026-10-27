@@ -2,14 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  aiActionUpdatedSchema,
   aiJobFailedSchema,
   aiStatusSchema,
   aiUsageSchema,
+  knowledgeDocumentStatusEventSchema,
   pollClosedSchema,
+  pollSuggestionsReadySchema,
   pollResultsEventSchema,
   pollStartedSchema,
   pollUpdatedSchema,
   presenceCountSchema,
+  qnaClustersUpdatedSchema,
+  qnaReviewUpdatedSchema,
   qnaStatusSchema,
   questionCreatedSchema,
   questionUpdatedSchema,
@@ -155,6 +160,26 @@ export const useSessionSocket = ({
     socket.on('ai:job-failed', (payload) => {
       const parsed = aiJobFailedSchema.safeParse(payload)
       if (parsed.success) dispatch({ type: 'ai_job_failed', payload: parsed.data })
+    })
+    socket.on('knowledge:document-status', (payload) => {
+      const parsed = knowledgeDocumentStatusEventSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'knowledge_status', payload: parsed.data })
+    })
+    socket.on('poll-suggestions:ready', (payload) => {
+      const parsed = pollSuggestionsReadySchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'poll_suggestions_ready', payload: parsed.data })
+    })
+    socket.on('qna:review-updated', (payload) => {
+      const parsed = qnaReviewUpdatedSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'qna_review_updated', payload: parsed.data })
+    })
+    socket.on('qna:clusters-updated', (payload) => {
+      const parsed = qnaClustersUpdatedSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'qna_clusters_updated', payload: parsed.data })
+    })
+    socket.on('ai-action:updated', (payload) => {
+      const parsed = aiActionUpdatedSchema.safeParse(payload)
+      if (parsed.success) dispatch({ type: 'ai_action_updated', payload: parsed.data })
     })
     socket.on('session:error', (payload) => {
       const parsed = sessionErrorSchema.safeParse(payload)

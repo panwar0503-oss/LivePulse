@@ -54,6 +54,7 @@ const held = (inner: LlmProvider): { provider: LlmProvider; entered: Promise<voi
         await gate
         return inner.complete(input)
       },
+      converse: inner.converse,
     },
     entered,
     release,

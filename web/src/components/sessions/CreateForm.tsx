@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from 'react'
 import { createSessionBodySchema, type CreateSessionBody } from '@livepulse/shared'
+import { Icon } from '../ui/Icon'
+import { button } from '../ui/styles'
 import { StatusMessage } from './StatusMessage'
 
 export type CreateFormProps = {
@@ -42,6 +44,12 @@ export function CreateForm({ pending, error, fieldErrors, onSubmit }: CreateForm
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4 text-left">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Host a session</h1>
+        <p className="text-muted">
+          Give your session a name and we will set up a room your audience can join.
+        </p>
+      </div>
       {error ? <StatusMessage kind="error">{error}</StatusMessage> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="title" className="font-medium">
@@ -89,9 +97,11 @@ export function CreateForm({ pending, error, fieldErrors, onSubmit }: CreateForm
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
+        aria-busy={pending}
+        className={`${button('primary')} self-start`}
       >
-        {pending ? 'Creating…' : 'Create session'}
+        <Icon name="plus" />
+        {pending ? 'Creating…' : 'Host a session'}
       </button>
     </form>
   )

@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from 'react'
 import { displayNameSchema, roomCodeSchema } from '@livepulse/shared'
 import { StatusMessage } from './StatusMessage'
+import { Icon } from '../ui/Icon'
+import { button, inputClass, labelClass, pageTitleClass } from '../ui/styles'
 
 export type JoinFormProps = {
   initialRoomCode: string
@@ -25,9 +27,6 @@ export const joinErrorText = (error: { code: string; message: string }): string 
       return error.message || 'Something went wrong. Please try again.'
   }
 }
-
-const inputClass =
-  'w-full rounded-xl border border-slate-500 bg-white px-3 py-2 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
 
 export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmit }: JoinFormProps) {
   const [roomCode, setRoomCode] = useState(initialRoomCode)
@@ -56,9 +55,13 @@ export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmi
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4 text-left">
+      <div className="flex flex-col gap-2">
+        <h1 className={pageTitleClass}>Join a session</h1>
+        <p className="text-muted">Enter the code shown on the screen, or open the link.</p>
+      </div>
       {error ? <StatusMessage kind="error">{joinErrorText(error)}</StatusMessage> : null}
       <div className="flex flex-col gap-1">
-        <label htmlFor="roomCode" className="font-medium">
+        <label htmlFor="roomCode" className={labelClass}>
           Room code
         </label>
         <input
@@ -76,13 +79,13 @@ export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmi
           className={`${inputClass} uppercase tracking-widest`}
         />
         {errors.roomCode ? (
-          <p id="roomCode-error" className="text-sm text-danger-800">
+          <p id="roomCode-error" className="text-sm font-medium text-danger-800">
             {errors.roomCode}
           </p>
         ) : null}
       </div>
       <div className="flex flex-col gap-1">
-        <label htmlFor="displayName" className="font-medium">
+        <label htmlFor="displayName" className={labelClass}>
           Your name
         </label>
         <input
@@ -99,17 +102,14 @@ export function JoinForm({ initialRoomCode, pending, error, fieldErrors, onSubmi
           className={inputClass}
         />
         {errors.displayName ? (
-          <p id="displayName-error" className="text-sm text-danger-800">
+          <p id="displayName-error" className="text-sm font-medium text-danger-800">
             {errors.displayName}
           </p>
         ) : null}
       </div>
-      <button
-        type="submit"
-        disabled={pending}
-        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
-      >
-        {pending ? 'Joining…' : 'Join session'}
+      <button type="submit" disabled={pending} className={button('primary')}>
+        <Icon name="users" />
+        {pending ? 'Joining…' : 'Join a session'}
       </button>
     </form>
   )

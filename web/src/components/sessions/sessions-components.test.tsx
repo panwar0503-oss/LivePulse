@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { CreateForm } from './CreateForm'
 import { JoinForm } from './JoinForm'
 import { SessionCreatedPanel } from './SessionCreatedPanel'
+import { routes } from '../../lib/routes'
 
 const noop = (): void => undefined
 
@@ -45,12 +46,19 @@ describe('session created panel', () => {
 
   it('shows the presenter key exactly once with a save-it-now warning', () => {
     expect(html.split(session.presenterKey)).toHaveLength(2)
-    expect(html).toContain('This presenter key is shown once. Save it now.')
+    expect(html).toContain('Save this key now. It is shown only once and is not stored in your browser.')
+  })
+
+  it('shows a host link without the key and a way to open the room', () => {
+    expect(html).toContain('Your host link')
+    expect(html).toContain(routes.hostRoom(session.sessionId))
+    expect(html).toContain('Use this link to come back to your room. It does not contain the key.')
+    expect(html).toContain('Open your room')
   })
 
   it('never puts the presenter key in a link', () => {
     const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1])
-    expect(hrefs).toEqual([`/presenter/${session.sessionId}`])
+    expect(hrefs).toEqual([routes.hostRoom(session.sessionId)])
   })
 
   it('shows the room code and join link', () => {

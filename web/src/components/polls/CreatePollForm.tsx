@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from 'react'
 import { createPollBodySchema, type CreatePollBody } from '@livepulse/shared'
 import { StatusMessage } from '../sessions/StatusMessage'
+import { Icon } from '../ui/Icon'
+import { button, checkboxClass, inputClass } from '../ui/styles'
 
 export type CreatePollFormProps = {
   pending: boolean
@@ -10,20 +12,23 @@ export type CreatePollFormProps = {
   // Messages from the server, keyed by field name.
   fieldErrors?: Record<string, string>
   onSubmit: (values: CreatePollBody) => void
+  // Prefill, e.g. from an AI suggestion. Read once on mount: the parent changes `key` to apply a new one.
+  initialValues?: { question: string; options: string[] }
 }
 
 const MIN_OPTIONS = 2
 const MAX_OPTIONS = 6
 const QUESTION_MAX = 200
 
-const inputClass =
-  'w-full rounded-xl border border-slate-500 bg-white px-3 py-2 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
-const secondaryButton =
-  'inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 font-medium transition-colors duration-150 enabled:hover:bg-slate-50 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50'
-
-export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: CreatePollFormProps) {
-  const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState<string[]>(['', ''])
+export function CreatePollForm({
+  pending,
+  error,
+  fieldErrors,
+  onSubmit,
+  initialValues,
+}: CreatePollFormProps) {
+  const [question, setQuestion] = useState(initialValues?.question ?? '')
+  const [options, setOptions] = useState<string[]>(initialValues?.options ?? ['', ''])
   const [showResults, setShowResults] = useState(true)
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({})
   const errors = { ...fieldErrors, ...clientErrors }
@@ -102,8 +107,9 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
               type="button"
               disabled={options.length <= MIN_OPTIONS}
               onClick={() => setOptions((current) => current.filter((_, i) => i !== index))}
-              className={`${secondaryButton} shrink-0`}
+              className={`${button('secondary', 'sm')} shrink-0`}
             >
+              <Icon name="trash" />
               Remove<span className="sr-only"> option {index + 1}</span>
             </button>
           </div>
@@ -118,8 +124,9 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
             type="button"
             disabled={options.length >= MAX_OPTIONS}
             onClick={() => setOptions((current) => [...current, ''])}
-            className={secondaryButton}
+            className={button('secondary')}
           >
+            <Icon name="plus" />
             Add option
           </button>
         </div>
@@ -130,7 +137,7 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
           type="checkbox"
           checked={showResults}
           onChange={(e) => setShowResults(e.target.checked)}
-          className="h-5 w-5 accent-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          className={checkboxClass}
         />
         Show results to participants
       </label>
@@ -138,8 +145,9 @@ export function CreatePollForm({ pending, error, fieldErrors, onSubmit }: Create
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2 font-medium text-white transition-colors duration-150 enabled:hover:bg-brand-700 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:bg-slate-400"
+        className={button('primary')}
       >
+        <Icon name="plus" />
         {pending ? 'Creating…' : 'Create poll'}
       </button>
     </form>

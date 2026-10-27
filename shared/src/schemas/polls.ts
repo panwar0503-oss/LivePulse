@@ -3,18 +3,21 @@ import { z } from 'zod'
 // eslint-disable-next-line no-control-regex -- matching control characters is the purpose
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/
 
+// Shared caps so other schemas (e.g. AI poll suggestions) reuse them instead of repeating the numbers.
+export const POLL_LIMITS = { questionMax: 200, optionMax: 80 } as const
+
 export const pollQuestionSchema = z
   .string()
   .trim()
   .min(1, 'Question must be 1–200 characters.')
-  .max(200, 'Question must be 1–200 characters.')
+  .max(POLL_LIMITS.questionMax, 'Question must be 1–200 characters.')
   .refine((v) => !CONTROL_CHARS.test(v), { message: 'Question must be 1–200 characters.' })
 
 export const pollOptionLabelSchema = z
   .string()
   .trim()
   .min(1, 'Each option must be 1–80 characters.')
-  .max(80, 'Each option must be 1–80 characters.')
+  .max(POLL_LIMITS.optionMax, 'Each option must be 1–80 characters.')
   .refine((v) => !CONTROL_CHARS.test(v), { message: 'Each option must be 1–80 characters.' })
 
 export const createPollBodySchema = z
