@@ -267,7 +267,7 @@ Development dependencies:
 | `@types/node` | ^20.0.0 | 20.19.43 | Node type definitions |
 
 Installed versions are the ones in `node_modules` on the machine where this file was written. The `package.json` files and
-`package-lock.json` are the source of truth; check them when versions change.
+`package-lock.json` (the lockfile, now listed in `.gitignore`) are the source of truth; check them when versions change.
 
 ---
 
@@ -325,4 +325,4 @@ database in `DATABASE_URL`. Do not rename a database to get past this check.
 | `AI_PROVIDER` to `anthropic` | Set `ANTHROPIC_API_KEY` first, or the API will not start |
 | `POSTGRES_*` | Applies when the database container is first created. Changing it later needs a new volume or a manual change inside PostgreSQL |
 | `NEXT_PUBLIC_API_URL` | Restart the web app. The value is built into the browser code |
-| Package versions (section 9) | Change only through `package.json` and `package-lock.json`, after the team approves the change |
+| Package versions (section 9) | Change only through `package.json`, after the team approves the change. Installs still write `package-lock.json` locally |
