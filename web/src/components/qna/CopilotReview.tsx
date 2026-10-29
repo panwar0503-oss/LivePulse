@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { QNA_COPILOT_LIMITS, type HeldQuestion, type ReviewDraft } from '@livepulse/shared'
 import { approveBody } from '../../lib/api/qna-copilot-client'
-import { locationLabel } from '../knowledge/KnowledgeResults'
 import { StatusMessage } from '../sessions/StatusMessage'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorState } from '../ui/ErrorState'
@@ -107,9 +106,7 @@ function DraftCard({ draft, busy, onApprove, onReject }: DraftCardProps) {
               <p className="text-sm font-semibold">Sources</p>
               <ul className="list-disc pl-5 text-sm break-words">
                 {draft.citations.map((c, i) => (
-                  <li key={i}>
-                    {c.documentName} · {locationLabel(c.location)}
-                  </li>
+                  <li key={i}>{c.documentName}</li>
                 ))}
               </ul>
             </div>
@@ -166,56 +163,60 @@ export function CopilotReview(props: CopilotReviewProps) {
         <ErrorState message="We could not load the questions to review." onRetry={props.onRetry} />
       ) : null}
 
-      {empty ? <EmptyState icon="check" title="All caught up">Nothing needs review right now.</EmptyState> : null}
+      {empty ? (
+        <EmptyState icon="check" title="All caught up">
+          Nothing needs review right now.
+        </EmptyState>
+      ) : null}
 
       {held.length > 0 ? (
         <ScrollArea label="Held questions list" maxHeightClass="max-h-96">
-        <ul aria-label="Held questions" className="flex flex-col gap-3">
-          {held.map((q) => (
-            <li key={q.questionId} className={itemCardClass}>
-              {q.label ? (
-                <span className="text-xs font-semibold text-slate-700">Flagged as {q.label}</span>
-              ) : null}
-              <p className="font-semibold break-words">{q.text}</p>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  disabled={busyId === q.questionId}
-                  onClick={() => props.onRelease(q.questionId)}
-                  className={button('primary')}
-                >
-                  <Icon name="check" />
-                  Release<span className="sr-only"> question: {q.text}</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={busyId === q.questionId}
-                  onClick={() => props.onRejectHeld(q.questionId)}
-                  className={button('dangerSecondary')}
-                >
-                  <Icon name="x" />
-                  Reject<span className="sr-only"> question: {q.text}</span>
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+          <ul aria-label="Held questions" className="flex flex-col gap-3">
+            {held.map((q) => (
+              <li key={q.questionId} className={itemCardClass}>
+                {q.label ? (
+                  <span className="text-xs font-semibold text-slate-700">Flagged as {q.label}</span>
+                ) : null}
+                <p className="font-semibold break-words">{q.text}</p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={busyId === q.questionId}
+                    onClick={() => props.onRelease(q.questionId)}
+                    className={button('primary')}
+                  >
+                    <Icon name="check" />
+                    Release<span className="sr-only"> question: {q.text}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId === q.questionId}
+                    onClick={() => props.onRejectHeld(q.questionId)}
+                    className={button('dangerSecondary')}
+                  >
+                    <Icon name="x" />
+                    Reject<span className="sr-only"> question: {q.text}</span>
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         </ScrollArea>
       ) : null}
 
       {drafts.length > 0 ? (
         <ScrollArea label="Draft answers list" maxHeightClass="max-h-[32rem]">
-        <ul aria-label="Draft answers" className="flex flex-col gap-3">
-          {drafts.map((d) => (
-            <DraftCard
-              key={d.id}
-              draft={d}
-              busy={busyId === d.id}
-              onApprove={props.onApprove}
-              onReject={props.onReject}
-            />
-          ))}
-        </ul>
+          <ul aria-label="Draft answers" className="flex flex-col gap-3">
+            {drafts.map((d) => (
+              <DraftCard
+                key={d.id}
+                draft={d}
+                busy={busyId === d.id}
+                onApprove={props.onApprove}
+                onReject={props.onReject}
+              />
+            ))}
+          </ul>
         </ScrollArea>
       ) : null}
     </section>

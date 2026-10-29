@@ -60,8 +60,8 @@ describe('knowledge page', () => {
       />,
     )
     expect(html).toContain('handbook.pdf')
-    expect(html).toContain('Page 4')
-    expect(html).toContain('Section 2')
+    expect(html).not.toContain('Page 4')
+    expect(html).not.toContain('Section 2')
     expect(html).toContain('&lt;b&gt;Refunds&lt;/b&gt;') // shown as plain text, never as markup
     expect(html.indexOf('handbook.pdf')).toBeLessThan(html.indexOf('notes.txt'))
   })

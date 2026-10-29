@@ -42,12 +42,11 @@ const render = (over: Partial<PollSuggestionsProps> = {}): string =>
   )
 
 describe('poll suggestions', () => {
-  it('each suggestion shows its source passage', () => {
+  it('each suggestion names its source file only, not the passage text or page', () => {
     const html = render({ result: result() })
-    expect(html).toContain('handbook.pdf')
-    expect(html).toContain('Page 4')
-    // Shown as plain text, never interpreted as HTML.
-    expect(html).toContain('Refunds take &lt;b&gt;five&lt;/b&gt; days.')
+    expect(html).toContain('Source: handbook.pdf')
+    expect(html).not.toContain('Page 4')
+    expect(html).not.toContain('Refunds take')
     expect(html).toContain('Use this')
     expect(html).toContain('Dismiss')
   })
@@ -95,6 +94,12 @@ describe('poll suggestions', () => {
   it('the AI-off message tells the presenter to turn AI on', () => {
     const html = render({ error: { code: 'AI_OFF_FOR_SESSION', message: 'x' } })
     expect(html).toContain('Turn AI on for this session to get poll ideas.')
+  })
+
+  it('with AI off, the idle panel says so and Suggest polls is disabled', () => {
+    const html = render({ aiOff: true })
+    expect(html).toContain('Turn AI on for this session to get poll ideas.')
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*Suggest polls/)
   })
 
   it('the budget message says the session used its AI budget', () => {

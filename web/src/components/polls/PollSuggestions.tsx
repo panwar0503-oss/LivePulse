@@ -1,5 +1,4 @@
 import type { PollSuggestion, PollSuggestionsResult } from '@livepulse/shared'
-import { locationLabel } from '../knowledge/KnowledgeResults'
 import { button, hintClass, itemCardClass } from '../ui/styles'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorState } from '../ui/ErrorState'
@@ -18,6 +17,8 @@ export type PollSuggestionsProps = {
   onDismiss: (index: number) => void
   // Fills the create form only; nothing is created until the presenter presses Create.
   onUse: (suggestion: PollSuggestion) => void
+  // AI is off for this session or on the server: say so up front instead of after a failed request.
+  aiOff?: boolean
 }
 
 export const NO_IDEAS_MESSAGE =
@@ -66,6 +67,7 @@ const viewOf = (p: PollSuggestionsProps): View => {
 export function PollSuggestions(props: PollSuggestionsProps) {
   const view = viewOf(props)
   const busy = view.kind === 'finding' || view.kind === 'loading'
+  const aiOff = props.aiOff === true
 
   return (
     <section aria-labelledby="poll-suggestions-heading" className="flex flex-col gap-3">
@@ -73,14 +75,21 @@ export function PollSuggestions(props: PollSuggestionsProps) {
         <h3 id="poll-suggestions-heading" className="font-semibold">
           Poll ideas from your documents
         </h3>
-        <button type="button" disabled={busy} onClick={props.onRequest} className={button('secondary')}>
+        <button
+          type="button"
+          disabled={busy || aiOff}
+          onClick={props.onRequest}
+          className={button('secondary')}
+        >
           <Icon name="sparkles" />
           Suggest polls
         </button>
       </div>
 
       {view.kind === 'idle' ? (
-        <p className={hintClass}>Get up to three poll ideas based on your uploaded documents.</p>
+        <p className={hintClass}>
+          {aiOff ? AI_OFF_MESSAGE : 'Get up to three poll ideas based on your uploaded documents.'}
+        </p>
       ) : null}
 
       {view.kind === 'loading' || view.kind === 'finding' ? (
@@ -105,53 +114,46 @@ export function PollSuggestions(props: PollSuggestionsProps) {
           ) : null}
           {view.notice === 'aiOff' ? <StatusMessage kind="info">{AI_OFF_MESSAGE}</StatusMessage> : null}
           {view.notice === 'budget' ? <StatusMessage kind="info">{BUDGET_MESSAGE}</StatusMessage> : null}
-          {view.notice === 'error' ? (
-            <ErrorState message={ERROR_MESSAGE} onRetry={props.onRequest} />
-          ) : null}
+          {view.notice === 'error' ? <ErrorState message={ERROR_MESSAGE} onRetry={props.onRequest} /> : null}
         </div>
       ) : null}
 
       {view.kind === 'list' ? (
         <ScrollArea label="Poll ideas" maxHeightClass="max-h-[32rem]">
-        <ol className="flex flex-col gap-3">
-          {view.suggestions.map((s) => (
-            <li key={s.index} className={itemCardClass}>
-              <p className="font-semibold break-words">{s.question}</p>
-              <ul className="list-disc pl-5 text-sm break-words">
-                {s.options.map((option, i) => (
-                  <li key={i}>{option}</li>
-                ))}
-              </ul>
-              <div className="flex flex-col gap-1 rounded-xl bg-slate-50 p-3">
-                <p className={hintClass}>
-                  Source: {s.source.documentName} · {locationLabel(s.source.location)}
-                </p>
-                <p className="text-sm break-words whitespace-pre-wrap">{s.source.text}</p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    props.onUse(s)
-                    props.onDismiss(s.index)
-                  }}
-                  className={button('primary')}
-                >
-                  <Icon name="check" />
-                  Use this<span className="sr-only">: {s.question}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => props.onDismiss(s.index)}
-                  className={button('secondary')}
-                >
-                  <Icon name="x" />
-                  Dismiss<span className="sr-only">: {s.question}</span>
-                </button>
-              </div>
-            </li>
-          ))}
-        </ol>
+          <ol className="flex flex-col gap-3">
+            {view.suggestions.map((s) => (
+              <li key={s.index} className={itemCardClass}>
+                <p className="font-semibold break-words">{s.question}</p>
+                <ul className="list-disc pl-5 text-sm break-words">
+                  {s.options.map((option, i) => (
+                    <li key={i}>{option}</li>
+                  ))}
+                </ul>
+                <p className={hintClass}>Source: {s.source.documentName}</p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onUse(s)
+                      props.onDismiss(s.index)
+                    }}
+                    className={button('primary')}
+                  >
+                    <Icon name="check" />
+                    Use this<span className="sr-only">: {s.question}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onDismiss(s.index)}
+                    className={button('secondary')}
+                  >
+                    <Icon name="x" />
+                    Dismiss<span className="sr-only">: {s.question}</span>
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
         </ScrollArea>
       ) : null}
     </section>

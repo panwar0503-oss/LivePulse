@@ -58,6 +58,20 @@ describe('AI panel', () => {
     expect(html).toContain('1,200 of 200,000 tokens used')
   })
 
+  it('repeated identical failures are listed once with a count', () => {
+    const failure = (minute: number) => ({
+      jobId: `00000000-0000-4000-8000-00000000000${minute}`,
+      type: 'PING' as const,
+      taskName: 'Diagnostic check',
+      errorCode: 'PROVIDER_REJECTED' as const,
+      message: 'x',
+      failedAt: `2026-10-24T10:0${minute}:00.000Z`,
+    })
+    const html = render(aiState({ recentFailures: [failure(1), failure(2), failure(3)] }))
+    expect(html.match(/The AI service could not process this request\./g)?.length).toBe(1)
+    expect(html).toContain('3 times')
+  })
+
   it('AI panel lists a safe failure message without provider text', () => {
     const html = render(
       aiState({
@@ -73,7 +87,6 @@ describe('AI panel', () => {
         ],
       }),
     )
-    expect(html).toContain('An AI task failed. Try again later.')
     expect(html).toContain('Diagnostic check')
     expect(html).toContain('The AI service took too long to respond.')
     expect(html).not.toContain('sk-secret')

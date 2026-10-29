@@ -1,7 +1,7 @@
 import type { KnowledgeLocation, KnowledgeResult } from '@livepulse/shared'
 import { EmptyState } from '../ui/EmptyState'
 import { ScrollArea } from '../ui/ScrollArea'
-import { hintClass, itemCardClass } from '../ui/styles'
+import { itemCardClass } from '../ui/styles'
 
 export const locationLabel = (location: KnowledgeLocation): string =>
   `${location.kind === 'page' ? 'Page' : 'Section'} ${location.number}`
@@ -17,19 +17,19 @@ export function KnowledgeResults({ results }: KnowledgeResultsProps) {
   return (
     <div role="status" aria-live="polite" className="flex flex-col gap-2">
       {results.length === 0 ? (
-        <EmptyState icon="search" title="No matches">No relevant passage was found.</EmptyState>
+        <EmptyState icon="search" title="No matches">
+          No relevant passage was found.
+        </EmptyState>
       ) : (
         <ScrollArea label="Search results">
-        <ol className="flex flex-col gap-2">
-          {results.map((result, index) => (
-            <li key={`${result.documentName}-${index}`} className={itemCardClass}>
-              <p className="font-medium text-ink">
-                {result.documentName} <span className={hintClass}>· {locationLabel(result.location)}</span>
-              </p>
-              <p className="whitespace-pre-wrap break-words text-sm text-ink">{result.text}</p>
-            </li>
-          ))}
-        </ol>
+          <ol className="flex flex-col gap-2">
+            {results.map((result, index) => (
+              <li key={`${result.documentName}-${index}`} className={itemCardClass}>
+                <p className="font-medium text-ink">{result.documentName}</p>
+                <p className="whitespace-pre-wrap break-words text-sm text-ink">{result.text}</p>
+              </li>
+            ))}
+          </ol>
         </ScrollArea>
       )}
     </div>

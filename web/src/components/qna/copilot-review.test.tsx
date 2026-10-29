@@ -81,7 +81,7 @@ describe('Q&A copilot review', () => {
     const html = renderToStaticMarkup(<CopilotReview {...props({ drafts: [draft()] })} />)
     expect(html).toContain('Refunds are open for 30 days.')
     expect(html).toContain('Policy.pdf')
-    expect(html).toContain('Page 3')
+    expect(html).not.toContain('Page 3')
     expect(html).not.toContain('SECRET QUOTE')
     expect(html).toContain('maxLength="500"')
     expect(html).toContain('High confidence')

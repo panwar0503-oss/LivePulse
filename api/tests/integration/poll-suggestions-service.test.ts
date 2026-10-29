@@ -178,15 +178,13 @@ describe('poll suggestions service', () => {
     expect(result).toMatchObject({ status: 'SUCCEEDED', outcome: 'READY', errorCode: null, message: null })
     expect(result.suggestions).toHaveLength(3)
     expect(result.suggestions.map((s) => s.index)).toEqual([1, 2, 3])
-    expect(result.suggestions[0]).toEqual({
-      index: 1,
-      question: 'Fake poll 1: which option fits passage 1?',
-      options: ['Option A', 'Option B', 'Option C'],
-      source: {
-        documentName: 'handbook.txt',
-        location: { kind: 'section', number: 1 },
-        text: 'handbook.txt section 1',
-      },
+    // The offline provider words its questions from the document; the test checks the shape, not the wording.
+    expect(result.suggestions[0]?.question).toContain('handbook.txt')
+    expect(result.suggestions[0]?.options.length).toBeGreaterThanOrEqual(2)
+    expect(result.suggestions[0]?.source).toEqual({
+      documentName: 'handbook.txt',
+      location: { kind: 'section', number: 1 },
+      text: 'handbook.txt section 1',
     })
     expect(JSON.stringify(result)).not.toContain('passageId')
     expect(await getLatestPollSuggestions(deps, { sessionId })).toEqual(result)

@@ -6,6 +6,7 @@ import type { PresenterSession } from '@livepulse/shared'
 import { routes } from '../../lib/routes'
 import { AudienceCount } from '../ui/AudienceCount'
 import { Card } from '../ui/Card'
+import { Icon } from '../ui/Icon'
 import { StatusPill } from '../ui/StatusPill'
 import { button, linkButton } from '../ui/styles'
 import { JoinDetails } from './JoinDetails'
@@ -88,6 +89,7 @@ export function PresenterDashboard({
         ) : (
           <div>
             <button type="button" onClick={() => setConfirming(true)} className={button('dangerSecondary')}>
+              <Icon name="trash" />
               End session
             </button>
           </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { CreatePollBody, PresenterPoll } from '@livepulse/shared'
+import { useAiState } from '../../hooks/use-ai-state'
 import { usePollSuggestions } from '../../hooks/use-poll-suggestions'
 import { usePresenterPolls } from '../../hooks/use-presenter-polls'
 import { closePoll, createPoll, startPoll, updatePoll } from '../../lib/api/polls'
@@ -15,6 +16,9 @@ export type PresenterPollsProps = { sessionId: string }
 export function PresenterPolls({ sessionId }: PresenterPollsProps) {
   const { polls, status, refresh, error } = usePresenterPolls(sessionId)
   const ideas = usePollSuggestions(sessionId)
+  const ai = useAiState(sessionId)
+  // Off until the state loads, so the button is not disabled while the first read is in flight.
+  const aiOff = ai.state !== null && !(ai.state.enabled && ai.state.globalEnabled)
   const [createPending, setCreatePending] = useState(false)
   const [createError, setCreateError] = useState<string | undefined>()
   const [createFields, setCreateFields] = useState<Record<string, string> | undefined>()
@@ -67,6 +71,7 @@ export function PresenterPolls({ sessionId }: PresenterPollsProps) {
         dismissed: ideas.dismissed,
         onRequest: ideas.request,
         onDismiss: ideas.dismiss,
+        aiOff,
       }}
     />
   )

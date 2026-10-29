@@ -14,14 +14,66 @@ const RETRYABLE: ReadonlySet<AiErrorCode> = new Set([
 
 const SUGGEST_POLLS_MARKER = '[task:suggest-polls]'
 
-// A fixed valid suggestion reply citing passages 1..min(3, N), so suggestion flows run without a model.
+// Attributes come in the order the suggest-polls prompt writes them: index, document, location.
+const PASSAGE_PATTERN = /<passage index="(\d+)" document="([^"]*)"[^>]*>([\s\S]*?)<\/passage>/g
+
+// Short plain sentences only: poll options are capped at 80 characters. Sentences with an "@" or a run of
+// seven or more digits (a phone number, possibly spaced out) are skipped, so contact details never appear.
+const usableSentences = (text: string): string[] =>
+  text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.replace(/\s+/g, ' ').trim())
+    .filter(
+      (sentence) => sentence.length >= 20 && sentence.length <= 80 && !/@|(\d[\s()-]*){7,}/.test(sentence),
+    )
+
+const TOPIC_STOP_WORDS = new Set([
+  'about',
+  'their',
+  'there',
+  'these',
+  'those',
+  'which',
+  'would',
+  'should',
+  'where',
+])
+
+// Words of five or more letters, most frequent first. Options are single words, never copied sentences.
+const topicsOf = (sentences: string[]): string[] => {
+  const counts = new Map<string, number>()
+  for (const word of sentences
+    .join(' ')
+    .toLowerCase()
+    .match(/[a-z]{5,}/g) ?? []) {
+    if (TOPIC_STOP_WORDS.has(word)) continue
+    counts.set(word, (counts.get(word) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([word]) => word)
+}
+
+const capitalise = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
+
+// Deterministic stand-in for the model, so suggestion flows run offline. Each poll asks which topic a
+// document covers most: its top word is the answer, and the top words of other documents are the rest.
 function suggestPollsReply(user: string): string {
-  const passageCount = user.split('<passage index="').length - 1
-  const polls = Array.from({ length: Math.min(3, passageCount) }, (_, i) => ({
-    question: `Fake poll ${i + 1}: which option fits passage ${i + 1}?`,
-    options: ['Option A', 'Option B', 'Option C'],
-    passageIndex: i + 1,
+  const passages = [...unescapePrompt(user).matchAll(PASSAGE_PATTERN)].map((match) => ({
+    index: Number(match[1]),
+    documentName: match[2] ?? '',
+    topics: topicsOf(usableSentences(match[3] ?? '')),
   }))
+  const everyTopic = passages.flatMap((passage) => passage.topics)
+  const polls = passages
+    .flatMap((passage) => {
+      const [topic] = passage.topics
+      if (topic === undefined) return []
+      const others = everyTopic.filter((word) => word !== topic).slice(0, 2)
+      const options = [...new Set([topic, ...others])].map(capitalise)
+      if (options.length < 3) options.push('None of these')
+      const question = `Which topic does ${passage.documentName} cover most?`
+      return [{ question, options, passageIndex: passage.index }]
+    })
+    .slice(0, 3)
   return JSON.stringify({ polls })
 }
 

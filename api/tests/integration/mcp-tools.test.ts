@@ -80,11 +80,12 @@ describe('LivePulse MCP tools', () => {
   }
 
   // The presenter's browser: presenter cookie plus the allowed Origin.
-  const web = (session: SessionFixture, method: 'post' | 'get', path: string): request.Test =>
-    request(harness().url)
-      [method](`/api/sessions/${session.id}${path}`)
+  const web = (session: SessionFixture, method: 'post' | 'get', path: string): request.Test => {
+    const agent = request(harness().url)
+    return agent[method](`/api/sessions/${session.id}${path}`)
       .set('Origin', WEB_ORIGIN)
       .set('Cookie', `lp_presenter_${session.id}=${session.presenterKey}`)
+  }
 
   const draftPoll = async (session: SessionFixture): Promise<string> => {
     const res = await web(session, 'post', '/polls').send({ question: 'Best day?', options: ['Mon', 'Tue'] })

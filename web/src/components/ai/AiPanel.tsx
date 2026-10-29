@@ -26,16 +26,32 @@ export const usageText = (usage: { tokensUsed: number; tokenBudget: number }): s
   `${usage.tokensUsed.toLocaleString('en-US')} of ${usage.tokenBudget.toLocaleString('en-US')} tokens used`
 
 // Task names and messages come from fixed tables keyed by type and code, never from the server text.
-function FailureItem({ failure }: { failure: AiFailure }) {
+// Repeats of the same task and error are shown once, with the latest time and a count.
+const groupFailures = (failures: AiFailure[]): { failure: AiFailure; count: number }[] => {
+  const groups = new Map<string, { failure: AiFailure; count: number }>()
+  for (const failure of failures) {
+    const key = `${failure.type}:${failure.errorCode}`
+    const group = groups.get(key)
+    if (!group) {
+      groups.set(key, { failure, count: 1 })
+      continue
+    }
+    group.count += 1
+    if (failure.failedAt > group.failure.failedAt) group.failure = failure
+  }
+  return [...groups.values()]
+}
+
+function FailureItem({ failure, count }: { failure: AiFailure; count: number }) {
   return (
     <li className={itemCardClass}>
-      <p className="font-medium text-ink">An AI task failed. Try again later.</p>
-      <p className="text-sm text-muted">
+      <p className="font-medium text-ink">
         {AI_TASK_NAMES[failure.type]}: {AI_ERROR_MESSAGES[failure.errorCode]}
       </p>
-      <time dateTime={failure.failedAt} className="text-sm text-muted">
-        {new Date(failure.failedAt).toLocaleString()}
-      </time>
+      <p className="text-sm text-muted">
+        <time dateTime={failure.failedAt}>{new Date(failure.failedAt).toLocaleString()}</time>
+        {count > 1 ? ` · ${count} times` : null}
+      </p>
     </li>
   )
 }
@@ -112,8 +128,8 @@ export function AiPanelView({
               <EmptyState>No AI failures.</EmptyState>
             ) : (
               <ul className="flex flex-col gap-2">
-                {state.recentFailures.map((failure) => (
-                  <FailureItem key={failure.jobId} failure={failure} />
+                {groupFailures(state.recentFailures).map(({ failure, count }) => (
+                  <FailureItem key={`${failure.type}:${failure.errorCode}`} failure={failure} count={count} />
                 ))}
               </ul>
             )}

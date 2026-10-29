@@ -7,15 +7,20 @@ import { KnowledgeSearch } from '../../../../components/knowledge/KnowledgeSearc
 import { KnowledgeUpload } from '../../../../components/knowledge/KnowledgeUpload'
 import { HostNav } from '../../../../components/sessions/HostNav'
 import { PresenterKeyNeeded } from '../../../../components/sessions/PresenterKeyNeeded'
+import { StatusMessage } from '../../../../components/sessions/StatusMessage'
 import { AppShell } from '../../../../components/ui/AppShell'
 import { Card } from '../../../../components/ui/Card'
 import { ErrorState } from '../../../../components/ui/ErrorState'
 import { LoadingState } from '../../../../components/ui/LoadingState'
+import { useAiState } from '../../../../hooks/use-ai-state'
 import { useKnowledge } from '../../../../hooks/use-knowledge'
 
 export default function KnowledgePage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const knowledge = useKnowledge(sessionId)
+  const ai = useAiState(sessionId)
+  // Adding a file starts an AI job, so it waits until AI is on for this session and on the server.
+  const aiReady = ai.state !== null && ai.state.enabled && ai.state.globalEnabled
   const loadFailed = !knowledge.loading && knowledge.error !== null && knowledge.documents.length === 0
 
   return (
@@ -31,7 +36,12 @@ export default function KnowledgePage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           <Card title="Files" headingLevel={2}>
-            <KnowledgeUpload disabled={knowledge.pending} onUpload={knowledge.upload} />
+            {ai.state !== null && !aiReady ? (
+              <StatusMessage kind="info">
+                AI is off for this session. Turn it on in the AI assistant on the session page to add files.
+              </StatusMessage>
+            ) : null}
+            <KnowledgeUpload disabled={knowledge.pending || !aiReady} onUpload={knowledge.upload} />
             {knowledge.loading ? (
               <LoadingState label="Loading files…" rows={1} />
             ) : loadFailed ? (
