@@ -93,6 +93,15 @@
     outline: 2px solid #2563eb;
     outline-offset: 2px;
   }
+
+  /* Every clickable element shows the pointer. Disabled buttons keep their own not-allowed cursor. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true']),
+  a[href],
+  summary {
+    cursor: pointer;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
